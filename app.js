@@ -1,8 +1,7 @@
 // ================= FIREBASE SETUP =================
-// Note: This uses standard ES Modules to connect to Firebase Firestore
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { 
-    getFirestore, collection, addDoc, onSnapshot, query, orderBy 
+    getFirestore, collection, addDoc, onSnapshot, query, orderBy, deleteDoc, doc 
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -17,7 +16,19 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// ================= SPLASH SCREEN & PARTICLES =================
+// Global Delete Function for Admin Panel
+window.deleteItem = async (colName, id) => {
+    if(confirm("Are you sure you want to delete this?")) {
+        try {
+            await deleteDoc(doc(db, colName, id));
+        } catch(e) { 
+            console.error(e); 
+            alert("Error deleting item."); 
+        }
+    }
+};
+
+// ================= SPLASH SCREEN & TABS =================
 document.addEventListener("DOMContentLoaded", () => {
     const chars = ["한","국","어","안","녕","사","랑","빛","꽃","달","별","길"];
     const container = document.getElementById("particles");
@@ -34,19 +45,17 @@ document.addEventListener("DOMContentLoaded", () => {
         container.appendChild(s);
     }
 
-    // Hide Splash after 4.5 seconds
     setTimeout(() => {
         const splash = document.getElementById('splash-screen');
         splash.style.opacity = '0';
         setTimeout(() => {
             splash.style.display = 'none';
             document.getElementById('main-app').style.display = 'block';
-            listenToData(); // Start Firebase real-time listeners
+            listenToData(); 
         }, 800);
     }, 4500);
 });
 
-// ================= TABS SWITCHING =================
 const tabBtns = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
 
@@ -54,7 +63,6 @@ tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
         tabBtns.forEach(b => b.classList.remove('active'));
         tabContents.forEach(c => c.classList.remove('active'));
-        
         btn.classList.add('active');
         document.getElementById(btn.dataset.target).classList.add('active');
     });
@@ -65,9 +73,7 @@ const logoBtn = document.getElementById('secret-logo');
 const pinModal = document.getElementById('pin-modal');
 const pinInput = document.getElementById('pin-input');
 const adminPanel = document.getElementById('admin-panel');
-
-let tapCount = 0;
-let tapTimeout;
+let tapCount = 0, tapTimeout;
 
 logoBtn.addEventListener('click', () => {
     tapCount++;
@@ -85,7 +91,7 @@ document.getElementById('cancel-pin').addEventListener('click', () => pinModal.s
 document.getElementById('submit-pin').addEventListener('click', () => {
     if(pinInput.value === '7890') {
         pinModal.style.display = 'none';
-        adminPanel.style.display = 'block';
+        adminPanel.style.display = 'flex';
     } else {
         alert("Incorrect PIN!");
         pinInput.value = '';
@@ -115,51 +121,43 @@ document.getElementById('btn-add-class').addEventListener('click', async () => {
     if(!title || !embedUrl) return alert("Title & Valid YouTube URL required!");
 
     try {
-        await addDoc(collection(db, "classes"), {
-            title, embedUrl, date, start, end, timestamp: Date.now()
-        });
-        alert("Class Added to Firebase!");
+        await addDoc(collection(db, "classes"), { title, embedUrl, date, start, end, timestamp: Date.now() });
         document.getElementById('class-title').value = '';
         document.getElementById('class-url').value = '';
-    } catch(e) { console.error("Error: ", e); alert("Failed to add"); }
+    } catch(e) { alert("Failed to add"); }
 });
 
-// 2. Add Notes (PDF Images)
+// 2. Add PDF Note (Direct Link)
 document.getElementById('btn-add-pdf').addEventListener('click', async () => {
     const title = document.getElementById('pdf-title').value;
-    const urlsRaw = document.getElementById('pdf-urls').value;
+    const pdfUrl = document.getElementById('pdf-url').value;
     
-    if(!title || !urlsRaw) return alert("Title and at least one Image URL required!");
-    const imgArray = urlsRaw.split(/[\n,]+/).map(u => u.trim()).filter(u => u !== "");
+    if(!title || !pdfUrl) return alert("Title and PDF URL required!");
 
     try {
-        await addDoc(collection(db, "pdfs"), {
-            title, images: imgArray, timestamp: Date.now()
-        });
-        alert("Notes Added to Firebase!");
+        await addDoc(collection(db, "pdfs"), { title, pdfUrl, timestamp: Date.now() });
         document.getElementById('pdf-title').value = '';
-        document.getElementById('pdf-urls').value = '';
-    } catch(e) { console.error("Error: ", e); alert("Failed to add"); }
+        document.getElementById('pdf-url').value = '';
+    } catch(e) { alert("Failed to add"); }
 });
 
-// 3. Add Announcement
+// 3. Add Announcement (With Optional Banner)
 document.getElementById('btn-add-ann').addEventListener('click', async () => {
     const title = document.getElementById('ann-title').value;
+    const bannerUrl = document.getElementById('ann-banner').value;
     const text = document.getElementById('ann-text').value;
     
     if(!title || !text) return alert("Title and Message required!");
 
     try {
-        await addDoc(collection(db, "announcements"), {
-            title, text, date: new Date().toLocaleDateString(), timestamp: Date.now()
-        });
-        alert("Announcement Added to Firebase!");
+        await addDoc(collection(db, "announcements"), { title, bannerUrl, text, date: new Date().toLocaleDateString(), timestamp: Date.now() });
         document.getElementById('ann-title').value = '';
+        document.getElementById('ann-banner').value = '';
         document.getElementById('ann-text').value = '';
-    } catch(e) { console.error("Error: ", e); alert("Failed to add"); }
+    } catch(e) { alert("Failed to add"); }
 });
 
-// 4. Add Banner
+// 4. Add Home Banner
 document.getElementById('btn-add-banner').addEventListener('click', async () => {
     const imgUrl = document.getElementById('banner-img').value;
     const linkUrl = document.getElementById('banner-link').value;
@@ -167,48 +165,47 @@ document.getElementById('btn-add-banner').addEventListener('click', async () => 
     if(!imgUrl) return alert("Banner Image URL required!");
 
     try {
-        await addDoc(collection(db, "banners"), {
-            imgUrl, linkUrl, timestamp: Date.now()
-        });
-        alert("Banner Added to Firebase!");
+        await addDoc(collection(db, "banners"), { imgUrl, linkUrl, timestamp: Date.now() });
         document.getElementById('banner-img').value = '';
         document.getElementById('banner-link').value = '';
-    } catch(e) { console.error("Error: ", e); alert("Failed to add"); }
+    } catch(e) { alert("Failed to add"); }
 });
 
 
-// ================= FIREBASE REAL-TIME LISTENERS (Fetch Data) =================
+// ================= FIREBASE REAL-TIME LISTENERS =================
 function listenToData() {
     
-    // Listen to Banners
-    const qBanners = query(collection(db, "banners"), orderBy("timestamp", "desc"));
-    onSnapshot(qBanners, (snapshot) => {
+    // Banners
+    onSnapshot(query(collection(db, "banners"), orderBy("timestamp", "desc")), (snapshot) => {
         const container = document.getElementById('banner-container');
-        if(snapshot.empty) {
-            container.style.display = 'none';
-        } else {
-            container.style.display = 'flex';
-            let html = '';
-            snapshot.forEach(doc => {
-                const b = doc.data();
-                html += `<a href="${b.linkUrl || '#'}" class="banner" target="${b.linkUrl ? '_blank' : '_self'}">
-                            <img src="${b.imgUrl}" alt="Banner">
-                         </a>`;
-            });
-            container.innerHTML = html;
-        }
+        const adminList = document.getElementById('admin-banner-list');
+        
+        let html = ''; let adminHtml = '';
+        snapshot.forEach(doc => {
+            const b = doc.data(); const id = doc.id;
+            html += `<a href="${b.linkUrl || '#'}" class="banner" target="${b.linkUrl ? '_blank' : '_self'}">
+                        <img src="${b.imgUrl}" alt="Banner">
+                     </a>`;
+            adminHtml += `<div class="admin-list-item">
+                            <img src="${b.imgUrl}" class="admin-item-img">
+                            <button class="del-btn" onclick="deleteItem('banners', '${id}')">Delete</button>
+                          </div>`;
+        });
+        
+        if(snapshot.empty) { container.style.display = 'none'; adminList.innerHTML = '<div class="empty-msg">No banners</div>'; } 
+        else { container.style.display = 'flex'; container.innerHTML = html; adminList.innerHTML = adminHtml; }
     });
 
-    // Listen to Classes
-    const qClasses = query(collection(db, "classes"), orderBy("timestamp", "desc"));
-    onSnapshot(qClasses, (snapshot) => {
+    // Classes
+    onSnapshot(query(collection(db, "classes"), orderBy("timestamp", "desc")), (snapshot) => {
         const container = document.getElementById('classes-list');
-        if(snapshot.empty) container.innerHTML = '<div class="empty-msg">No classes scheduled yet.</div>';
+        const adminList = document.getElementById('admin-class-list');
+        
+        if(snapshot.empty) { container.innerHTML = '<div class="empty-msg">No classes scheduled yet.</div>'; adminList.innerHTML = '<div class="empty-msg">No classes</div>'; }
         else {
-            let html = '';
+            let html = ''; let adminHtml = '';
             snapshot.forEach(doc => {
-                const c = doc.data();
-                // "allowfullscreen" is properly added here for rotation/full screen on mobile
+                const c = doc.data(); const id = doc.id;
                 html += `
                     <div class="card">
                         <h3 class="card-title">${c.title}</h3>
@@ -221,49 +218,65 @@ function listenToData() {
                             ${c.end ? `<span>🔴 Ended: ${c.end}</span>` : ''}
                         </div>
                     </div>`;
+                adminHtml += `<div class="admin-list-item">
+                                <span class="admin-item-text">${c.title}</span>
+                                <button class="del-btn" onclick="deleteItem('classes', '${id}')">Delete</button>
+                              </div>`;
             });
-            container.innerHTML = html;
+            container.innerHTML = html; adminList.innerHTML = adminHtml;
         }
     });
 
-    // Listen to PDFs (Notes)
-    const qPdfs = query(collection(db, "pdfs"), orderBy("timestamp", "desc"));
-    onSnapshot(qPdfs, (snapshot) => {
+    // PDFs (Vertical List Style)
+    onSnapshot(query(collection(db, "pdfs"), orderBy("timestamp", "desc")), (snapshot) => {
         const container = document.getElementById('pdfs-list');
-        if(snapshot.empty) container.innerHTML = '<div class="empty-msg">No notes available.</div>';
+        const adminList = document.getElementById('admin-pdf-list');
+        
+        if(snapshot.empty) { container.innerHTML = '<div class="empty-msg">No notes available.</div>'; adminList.innerHTML = '<div class="empty-msg">No notes</div>'; }
         else {
-            let html = '';
+            let html = ''; let adminHtml = '';
             snapshot.forEach(doc => {
-                const p = doc.data();
+                const p = doc.data(); const id = doc.id;
                 html += `
-                    <div class="card">
-                        <h3 class="card-title">📄 ${p.title}</h3>
-                        <div class="pdf-images">
-                            ${p.images.map(img => `<img src="${img}" alt="Page" loading="lazy">`).join('')}
+                    <a href="${p.pdfUrl}" target="_blank" class="pdf-item">
+                        <div class="pdf-item-left">
+                            <div class="pdf-icon-circle">📄</div>
+                            <span class="pdf-title-text">${p.title}</span>
                         </div>
-                    </div>`;
+                        <span class="pdf-open-btn">View PDF</span>
+                    </a>`;
+                adminHtml += `<div class="admin-list-item">
+                                <span class="admin-item-text">${p.title}</span>
+                                <button class="del-btn" onclick="deleteItem('pdfs', '${id}')">Delete</button>
+                              </div>`;
             });
-            container.innerHTML = html;
+            container.innerHTML = html; adminList.innerHTML = adminHtml;
         }
     });
 
-    // Listen to Announcements
-    const qAnns = query(collection(db, "announcements"), orderBy("timestamp", "desc"));
-    onSnapshot(qAnns, (snapshot) => {
+    // Announcements
+    onSnapshot(query(collection(db, "announcements"), orderBy("timestamp", "desc")), (snapshot) => {
         const container = document.getElementById('announcements-list');
-        if(snapshot.empty) container.innerHTML = '<div class="empty-msg">No recent announcements.</div>';
+        const adminList = document.getElementById('admin-ann-list');
+        
+        if(snapshot.empty) { container.innerHTML = '<div class="empty-msg">No recent announcements.</div>'; adminList.innerHTML = '<div class="empty-msg">No announcements</div>'; }
         else {
-            let html = '';
+            let html = ''; let adminHtml = '';
             snapshot.forEach(doc => {
-                const a = doc.data();
+                const a = doc.data(); const id = doc.id;
                 html += `
                     <div class="card">
                         <h3 class="card-title">📢 ${a.title}</h3>
+                        ${a.bannerUrl ? `<img src="${a.bannerUrl}" class="ann-banner-img" alt="Announcement Banner">` : ''}
                         <div class="ann-text">${a.text}</div>
                         <span class="ann-date">Posted on: ${a.date}</span>
                     </div>`;
+                adminHtml += `<div class="admin-list-item">
+                                <span class="admin-item-text">${a.title}</span>
+                                <button class="del-btn" onclick="deleteItem('announcements', '${id}')">Delete</button>
+                              </div>`;
             });
-            container.innerHTML = html;
+            container.innerHTML = html; adminList.innerHTML = adminHtml;
         }
     });
 }
