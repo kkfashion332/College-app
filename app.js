@@ -1,6 +1,24 @@
+// ================= FIREBASE SETUP =================
+// Note: This uses standard ES Modules to connect to Firebase Firestore
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { 
+    getFirestore, collection, addDoc, onSnapshot, query, orderBy 
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyC7p8eRQZ6Qt_gQ0AsVoKdL_oLI7EhsAqc",
+    authDomain: "korean-language-e1c07.firebaseapp.com",
+    projectId: "korean-language-e1c07",
+    storageBucket: "korean-language-e1c07.firebasestorage.app",
+    messagingSenderId: "947925943853",
+    appId: "1:947925943853:web:a1c37f38a12a1608a55aa4"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
 // ================= SPLASH SCREEN & PARTICLES =================
 document.addEventListener("DOMContentLoaded", () => {
-    // Generate particles
     const chars = ["한","국","어","안","녕","사","랑","빛","꽃","달","별","길"];
     const container = document.getElementById("particles");
     for(let i=0; i<25; i++){
@@ -16,14 +34,14 @@ document.addEventListener("DOMContentLoaded", () => {
         container.appendChild(s);
     }
 
-    // Hide Splash after 4.5 seconds and show main app
+    // Hide Splash after 4.5 seconds
     setTimeout(() => {
         const splash = document.getElementById('splash-screen');
         splash.style.opacity = '0';
         setTimeout(() => {
             splash.style.display = 'none';
             document.getElementById('main-app').style.display = 'block';
-            loadAllData(); // Load data from localStorage
+            listenToData(); // Start Firebase real-time listeners
         }, 800);
     }, 4500);
 });
@@ -54,21 +72,16 @@ let tapTimeout;
 logoBtn.addEventListener('click', () => {
     tapCount++;
     clearTimeout(tapTimeout);
-    
     if(tapCount >= 7) {
         pinModal.style.display = 'flex';
         pinInput.value = '';
         pinInput.focus();
         tapCount = 0;
     }
-    
     tapTimeout = setTimeout(() => { tapCount = 0; }, 1500);
 });
 
-document.getElementById('cancel-pin').addEventListener('click', () => {
-    pinModal.style.display = 'none';
-});
-
+document.getElementById('cancel-pin').addEventListener('click', () => pinModal.style.display = 'none');
 document.getElementById('submit-pin').addEventListener('click', () => {
     if(pinInput.value === '7890') {
         pinModal.style.display = 'none';
@@ -78,28 +91,20 @@ document.getElementById('submit-pin').addEventListener('click', () => {
         pinInput.value = '';
     }
 });
+document.getElementById('close-admin').addEventListener('click', () => adminPanel.style.display = 'none');
 
-document.getElementById('close-admin').addEventListener('click', () => {
-    adminPanel.style.display = 'none';
-    loadAllData(); // Refresh UI after changes
-});
 
-// ================= DATA MANAGEMENT (LocalStorage) =================
+// ================= FIREBASE DATABASE (Add Data) =================
 
-// Utility to convert standard YT url to embed url
 function getYouTubeEmbedUrl(url) {
     let videoId = "";
-    if(url.includes('v=')) {
-        videoId = url.split('v=')[1].substring(0, 11);
-    } else if(url.includes('youtu.be/')) {
-        videoId = url.split('youtu.be/')[1].substring(0, 11);
-    }
-    // rel=0 ensures only videos from the same channel are suggested at the end
+    if(url.includes('v=')) videoId = url.split('v=')[1].substring(0, 11);
+    else if(url.includes('youtu.be/')) videoId = url.split('youtu.be/')[1].substring(0, 11);
     return videoId ? `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1` : null;
 }
 
 // 1. Add Class
-function addClass() {
+document.getElementById('btn-add-class').addEventListener('click', async () => {
     const title = document.getElementById('class-title').value;
     const url = document.getElementById('class-url').value;
     const date = document.getElementById('class-date').value;
@@ -107,145 +112,158 @@ function addClass() {
     const end = document.getElementById('class-end').value;
 
     const embedUrl = getYouTubeEmbedUrl(url);
-    
     if(!title || !embedUrl) return alert("Title & Valid YouTube URL required!");
 
-    const newClass = { id: Date.now(), title, embedUrl, date, start, end };
-    const classes = JSON.parse(localStorage.getItem('app_classes') || '[]');
-    classes.unshift(newClass);
-    localStorage.setItem('app_classes', JSON.stringify(classes));
-    
-    alert("Class Added Successfully!");
-    document.getElementById('class-title').value = '';
-    document.getElementById('class-url').value = '';
-}
+    try {
+        await addDoc(collection(db, "classes"), {
+            title, embedUrl, date, start, end, timestamp: Date.now()
+        });
+        alert("Class Added to Firebase!");
+        document.getElementById('class-title').value = '';
+        document.getElementById('class-url').value = '';
+    } catch(e) { console.error("Error: ", e); alert("Failed to add"); }
+});
 
-// 2. Add PDF (Images)
-function addPdf() {
+// 2. Add Notes (PDF Images)
+document.getElementById('btn-add-pdf').addEventListener('click', async () => {
     const title = document.getElementById('pdf-title').value;
     const urlsRaw = document.getElementById('pdf-urls').value;
     
     if(!title || !urlsRaw) return alert("Title and at least one Image URL required!");
-
-    // Split by comma or newline, trim spaces, remove empties
     const imgArray = urlsRaw.split(/[\n,]+/).map(u => u.trim()).filter(u => u !== "");
 
-    const newPdf = { id: Date.now(), title, images: imgArray };
-    const pdfs = JSON.parse(localStorage.getItem('app_pdfs') || '[]');
-    pdfs.unshift(newPdf);
-    localStorage.setItem('app_pdfs', JSON.stringify(pdfs));
-
-    alert("PDF (Images) Added Successfully!");
-    document.getElementById('pdf-title').value = '';
-    document.getElementById('pdf-urls').value = '';
-}
+    try {
+        await addDoc(collection(db, "pdfs"), {
+            title, images: imgArray, timestamp: Date.now()
+        });
+        alert("Notes Added to Firebase!");
+        document.getElementById('pdf-title').value = '';
+        document.getElementById('pdf-urls').value = '';
+    } catch(e) { console.error("Error: ", e); alert("Failed to add"); }
+});
 
 // 3. Add Announcement
-function addAnnouncement() {
+document.getElementById('btn-add-ann').addEventListener('click', async () => {
     const title = document.getElementById('ann-title').value;
     const text = document.getElementById('ann-text').value;
     
     if(!title || !text) return alert("Title and Message required!");
 
-    const newAnn = { id: Date.now(), title, text, date: new Date().toLocaleDateString() };
-    const anns = JSON.parse(localStorage.getItem('app_anns') || '[]');
-    anns.unshift(newAnn);
-    localStorage.setItem('app_anns', JSON.stringify(anns));
-
-    alert("Announcement Added!");
-    document.getElementById('ann-title').value = '';
-    document.getElementById('ann-text').value = '';
-}
+    try {
+        await addDoc(collection(db, "announcements"), {
+            title, text, date: new Date().toLocaleDateString(), timestamp: Date.now()
+        });
+        alert("Announcement Added to Firebase!");
+        document.getElementById('ann-title').value = '';
+        document.getElementById('ann-text').value = '';
+    } catch(e) { console.error("Error: ", e); alert("Failed to add"); }
+});
 
 // 4. Add Banner
-function addBanner() {
+document.getElementById('btn-add-banner').addEventListener('click', async () => {
     const imgUrl = document.getElementById('banner-img').value;
     const linkUrl = document.getElementById('banner-link').value;
     
     if(!imgUrl) return alert("Banner Image URL required!");
 
-    const newBanner = { id: Date.now(), imgUrl, linkUrl };
-    const banners = JSON.parse(localStorage.getItem('app_banners') || '[]');
-    banners.unshift(newBanner);
-    localStorage.setItem('app_banners', JSON.stringify(banners));
+    try {
+        await addDoc(collection(db, "banners"), {
+            imgUrl, linkUrl, timestamp: Date.now()
+        });
+        alert("Banner Added to Firebase!");
+        document.getElementById('banner-img').value = '';
+        document.getElementById('banner-link').value = '';
+    } catch(e) { console.error("Error: ", e); alert("Failed to add"); }
+});
 
-    alert("Banner Added!");
-    document.getElementById('banner-img').value = '';
-    document.getElementById('banner-link').value = '';
-}
 
-// Clear All
-function clearAllData() {
-    if(confirm("Are you sure? This will delete all classes, PDFs, and banners!")) {
-        localStorage.clear();
-        alert("All data cleared!");
-        loadAllData();
-    }
-}
-
-// ================= RENDER UI =================
-function loadAllData() {
+// ================= FIREBASE REAL-TIME LISTENERS (Fetch Data) =================
+function listenToData() {
     
-    // 1. Render Banners
-    const banners = JSON.parse(localStorage.getItem('app_banners') || '[]');
-    const bannerContainer = document.getElementById('banner-container');
-    if(banners.length === 0) {
-        bannerContainer.style.display = 'none';
-    } else {
-        bannerContainer.style.display = 'flex';
-        bannerContainer.innerHTML = banners.map(b => `
-            <a href="${b.linkUrl || '#'}" class="banner" target="${b.linkUrl ? '_blank' : '_self'}">
-                <img src="${b.imgUrl}" alt="Banner">
-            </a>
-        `).join('');
-    }
+    // Listen to Banners
+    const qBanners = query(collection(db, "banners"), orderBy("timestamp", "desc"));
+    onSnapshot(qBanners, (snapshot) => {
+        const container = document.getElementById('banner-container');
+        if(snapshot.empty) {
+            container.style.display = 'none';
+        } else {
+            container.style.display = 'flex';
+            let html = '';
+            snapshot.forEach(doc => {
+                const b = doc.data();
+                html += `<a href="${b.linkUrl || '#'}" class="banner" target="${b.linkUrl ? '_blank' : '_self'}">
+                            <img src="${b.imgUrl}" alt="Banner">
+                         </a>`;
+            });
+            container.innerHTML = html;
+        }
+    });
 
-    // 2. Render Classes
-    const classes = JSON.parse(localStorage.getItem('app_classes') || '[]');
-    const classContainer = document.getElementById('classes-list');
-    if(classes.length === 0) classContainer.innerHTML = '<div class="empty-msg">No classes scheduled yet.</div>';
-    else {
-        classContainer.innerHTML = classes.map(c => `
-            <div class="card">
-                <h3 class="card-title">${c.title}</h3>
-                <div class="video-wrapper">
-                    <iframe src="${c.embedUrl}" allowfullscreen></iframe>
-                </div>
-                <div class="class-meta">
-                    ${c.date ? `<span>📅 ${c.date}</span>` : ''}
-                    ${c.start ? `<span>🟢 Live: ${c.start}</span>` : ''}
-                    ${c.end ? `<span>🔴 Ended: ${c.end}</span>` : ''}
-                </div>
-            </div>
-        `).join('');
-    }
+    // Listen to Classes
+    const qClasses = query(collection(db, "classes"), orderBy("timestamp", "desc"));
+    onSnapshot(qClasses, (snapshot) => {
+        const container = document.getElementById('classes-list');
+        if(snapshot.empty) container.innerHTML = '<div class="empty-msg">No classes scheduled yet.</div>';
+        else {
+            let html = '';
+            snapshot.forEach(doc => {
+                const c = doc.data();
+                // "allowfullscreen" is properly added here for rotation/full screen on mobile
+                html += `
+                    <div class="card">
+                        <h3 class="card-title">${c.title}</h3>
+                        <div class="video-wrapper">
+                            <iframe src="${c.embedUrl}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="allowfullscreen" webkitallowfullscreen="true" mozallowfullscreen="true"></iframe>
+                        </div>
+                        <div class="class-meta">
+                            ${c.date ? `<span>📅 ${c.date}</span>` : ''}
+                            ${c.start ? `<span>🟢 Live: ${c.start}</span>` : ''}
+                            ${c.end ? `<span>🔴 Ended: ${c.end}</span>` : ''}
+                        </div>
+                    </div>`;
+            });
+            container.innerHTML = html;
+        }
+    });
 
-    // 3. Render PDFs
-    const pdfs = JSON.parse(localStorage.getItem('app_pdfs') || '[]');
-    const pdfContainer = document.getElementById('pdfs-list');
-    if(pdfs.length === 0) pdfContainer.innerHTML = '<div class="empty-msg">No PDFs available.</div>';
-    else {
-        pdfContainer.innerHTML = pdfs.map(p => `
-            <div class="card">
-                <h3 class="card-title">📄 ${p.title}</h3>
-                <div class="pdf-images">
-                    ${p.images.map(img => `<img src="${img}" alt="Page" loading="lazy">`).join('')}
-                </div>
-            </div>
-        `).join('');
-    }
+    // Listen to PDFs (Notes)
+    const qPdfs = query(collection(db, "pdfs"), orderBy("timestamp", "desc"));
+    onSnapshot(qPdfs, (snapshot) => {
+        const container = document.getElementById('pdfs-list');
+        if(snapshot.empty) container.innerHTML = '<div class="empty-msg">No notes available.</div>';
+        else {
+            let html = '';
+            snapshot.forEach(doc => {
+                const p = doc.data();
+                html += `
+                    <div class="card">
+                        <h3 class="card-title">📄 ${p.title}</h3>
+                        <div class="pdf-images">
+                            ${p.images.map(img => `<img src="${img}" alt="Page" loading="lazy">`).join('')}
+                        </div>
+                    </div>`;
+            });
+            container.innerHTML = html;
+        }
+    });
 
-    // 4. Render Announcements
-    const anns = JSON.parse(localStorage.getItem('app_anns') || '[]');
-    const annContainer = document.getElementById('announcements-list');
-    if(anns.length === 0) annContainer.innerHTML = '<div class="empty-msg">No recent announcements.</div>';
-    else {
-        annContainer.innerHTML = anns.map(a => `
-            <div class="card">
-                <h3 class="card-title">📢 ${a.title}</h3>
-                <div class="ann-text">${a.text}</div>
-                <span class="ann-date">Posted on: ${a.date}</span>
-            </div>
-        `).join('');
-    }
+    // Listen to Announcements
+    const qAnns = query(collection(db, "announcements"), orderBy("timestamp", "desc"));
+    onSnapshot(qAnns, (snapshot) => {
+        const container = document.getElementById('announcements-list');
+        if(snapshot.empty) container.innerHTML = '<div class="empty-msg">No recent announcements.</div>';
+        else {
+            let html = '';
+            snapshot.forEach(doc => {
+                const a = doc.data();
+                html += `
+                    <div class="card">
+                        <h3 class="card-title">📢 ${a.title}</h3>
+                        <div class="ann-text">${a.text}</div>
+                        <span class="ann-date">Posted on: ${a.date}</span>
+                    </div>`;
+            });
+            container.innerHTML = html;
+        }
+    });
 }
