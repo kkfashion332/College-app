@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Premium Classes App</title>
+    <title>OWN CLASS ROOM</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Inter:wght@300;400;600&family=Noto+Serif+KR:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Inter:wght@300;400;600&family=Noto+Serif+KR:wght@400;700&family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <!-- ================= SPLASH SCREEN (Animation) ================= -->
+    <!-- ================= SPLASH SCREEN ================= -->
     <div id="splash-screen">
         <div class="bg-radial"></div>
         <div class="vignette"></div>
@@ -46,20 +46,34 @@
             <div class="header-left">
                 <!-- 7 baar tap karne ke liye logo -->
                 <img src="korean-logo.png" id="secret-logo" alt="Logo" onerror="this.src='https://via.placeholder.com/50/0b1024/d4b062?text=L'">
-                <h2>My Classes</h2>
+                <h2 class="brand-text gold-shimmer">OWN CLASS ROOM</h2>
             </div>
+            <!-- Download Button -->
+            <a href="https://drive.google.com/file/d/1rziTLqUP_jCb0PcSZED5WrSIlO_t6ZNT/view?usp=drivesdk" target="_blank" class="download-btn-top" title="Download App">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+            </a>
         </header>
 
         <!-- Top Banners Section -->
         <div class="banner-slider" id="banner-container">
-            <!-- Banners JavaScript se aayenge -->
+            <!-- Loading text ya banners JS se aayenge -->
         </div>
 
-        <!-- Navigation Tabs -->
+        <!-- Navigation Tabs (Unique Text Style) -->
         <nav class="main-tabs">
-            <button class="tab-btn active" data-target="classes-sec">Classes</button>
-            <button class="tab-btn" data-target="pdfs-sec">Class PDF</button>
-            <button class="tab-btn" data-target="announcements-sec">Announcement</button>
+            <button class="tab-btn active" data-target="classes-sec">
+                <span class="tab-icon">✨</span> <span class="tab-text">Classes</span>
+            </button>
+            <button class="tab-btn" data-target="pdfs-sec">
+                <span class="tab-icon">📚</span> <span class="tab-text">Notes</span>
+            </button>
+            <button class="tab-btn" data-target="announcements-sec">
+                <span class="tab-icon">🔔</span> <span class="tab-text">Announcement</span>
+            </button>
         </nav>
 
         <!-- Content Sections -->
@@ -67,17 +81,23 @@
             
             <!-- Classes Tab -->
             <section id="classes-sec" class="tab-content active">
-                <div id="classes-list" class="grid-layout"></div>
+                <div id="classes-list" class="grid-layout">
+                    <div class="empty-msg">Loading classes from cloud...</div>
+                </div>
             </section>
 
             <!-- PDF Tab -->
             <section id="pdfs-sec" class="tab-content">
-                <div id="pdfs-list" class="grid-layout"></div>
+                <div id="pdfs-list" class="grid-layout">
+                    <div class="empty-msg">Loading notes from cloud...</div>
+                </div>
             </section>
 
             <!-- Announcements Tab -->
             <section id="announcements-sec" class="tab-content">
-                <div id="announcements-list" class="grid-layout"></div>
+                <div id="announcements-list" class="grid-layout">
+                    <div class="empty-msg">Loading announcements from cloud...</div>
+                </div>
             </section>
 
         </main>
@@ -99,18 +119,17 @@
     <!-- ================= ADMIN PANEL ================= -->
     <div id="admin-panel" style="display: none;">
         <header class="admin-header">
-            <h2>Admin Dashboard</h2>
+            <h2>Admin Dashboard (Firestore Sync)</h2>
             <button id="close-admin" class="btn outline">Exit</button>
         </header>
         
         <div class="admin-grid">
-            
             <!-- Add Banner -->
             <div class="admin-card">
                 <h3>Add Banner</h3>
-                <input type="text" id="banner-img" placeholder="Banner Image URL (Rectangular)">
+                <input type="text" id="banner-img" placeholder="Banner Image URL">
                 <input type="text" id="banner-link" placeholder="Click Link URL (Optional)">
-                <button onclick="addBanner()" class="btn gold w-100">Add Banner</button>
+                <button id="btn-add-banner" class="btn gold w-100">Add Banner</button>
             </div>
 
             <!-- Add Class -->
@@ -123,15 +142,15 @@
                     <input type="time" id="class-start" title="Start Time">
                     <input type="time" id="class-end" title="End Time">
                 </div>
-                <button onclick="addClass()" class="btn gold w-100">Add Class</button>
+                <button id="btn-add-class" class="btn gold w-100">Add Class</button>
             </div>
 
-            <!-- Add PDF (Images) -->
+            <!-- Add PDF -->
             <div class="admin-card">
-                <h3>Add Class PDF (Images)</h3>
-                <input type="text" id="pdf-title" placeholder="PDF/Topic Title">
-                <textarea id="pdf-urls" rows="4" placeholder="Paste multiple image URLs here (separated by comma or new line)"></textarea>
-                <button onclick="addPdf()" class="btn gold w-100">Add PDF</button>
+                <h3>Add Class Notes (Images)</h3>
+                <input type="text" id="pdf-title" placeholder="Notes Topic Title">
+                <textarea id="pdf-urls" rows="4" placeholder="Paste multiple image URLs here"></textarea>
+                <button id="btn-add-pdf" class="btn gold w-100">Add Notes</button>
             </div>
 
             <!-- Add Announcement -->
@@ -139,16 +158,16 @@
                 <h3>Add Announcement</h3>
                 <input type="text" id="ann-title" placeholder="Announcement Title">
                 <textarea id="ann-text" rows="3" placeholder="Message details..."></textarea>
-                <button onclick="addAnnouncement()" class="btn gold w-100">Post Announcement</button>
+                <button id="btn-add-ann" class="btn gold w-100">Post Announcement</button>
             </div>
-
+            
             <div class="admin-card full-width">
-                <button onclick="clearAllData()" class="btn danger">Clear All App Data</button>
+                <p style="color:var(--muted); font-size:12px; margin-bottom:10px;">To clear database, you must delete entries from Firebase Console directly for security.</p>
             </div>
-
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- Type module jaruri hai Firebase imports ke liye -->
+    <script type="module" src="app.js"></script>
 </body>
 </html>
