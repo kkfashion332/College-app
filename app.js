@@ -154,14 +154,15 @@ document.getElementById('btn-add-banner').addEventListener('click', async () => 
 function getPlayerHtml(mediaUrl, id) {
     if(!mediaUrl) return '';
     
-    // 1. Google Drive Link Extraction
+    // 1. Google Drive Link Extraction (Video Tag for Plyr)
     if (mediaUrl.includes("drive.google.com")) {
         const match = mediaUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
         if (match && match[1]) {
-            let embedUrl = `https://drive.google.com/file/d/${match[1]}/preview`;
-            return `<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px;">
-                        <iframe src="${embedUrl}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" allowfullscreen></iframe>
-                    </div>`;
+            // Direct download link for streaming
+            let directUrl = `https://drive.google.com/uc?export=download&id=${match[1]}`;
+            return `<video id="player-${id}" playsinline controls style="width: 100%; border-radius: 8px;">
+                        <source src="${directUrl}" type="video/mp4" />
+                    </video>`;
         }
     }
     
