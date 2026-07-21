@@ -5,7 +5,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
-    apiKey: "AIzaSyC7p8eRQZ6Qt_gQ0AsVoKdL_oLI7EhsAqc",
+    apiKey: "AIzaSyBXG231Aww3fBil2cY2xMl0m5pOmtfXoRs",
     authDomain: "korean-language-e1c07.firebaseapp.com",
     projectId: "korean-language-e1c07",
     storageBucket: "korean-language-e1c07.firebasestorage.app",
@@ -106,7 +106,7 @@ document.getElementById('close-admin').addEventListener('click', () => adminPane
 // ================= FIREBASE DATABASE ADD =================
 document.getElementById('btn-add-class').addEventListener('click', async () => {
     const title = document.getElementById('class-title').value;
-    const url = document.getElementById('class-url').value; // We store raw URL, parser will handle it
+    const url = document.getElementById('class-url').value; 
     const date = document.getElementById('class-date').value;
     const start = document.getElementById('class-start').value;
     const end = document.getElementById('class-end').value;
@@ -154,19 +154,18 @@ document.getElementById('btn-add-banner').addEventListener('click', async () => 
 function getPlayerHtml(mediaUrl, id) {
     if(!mediaUrl) return '';
     
-    // 1. Google Drive Link extraction
+    // 1. Google Drive Link Extraction
     if (mediaUrl.includes("drive.google.com")) {
         const match = mediaUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
         if (match && match[1]) {
-            // Converts drive link into direct MP4 stream for the video player
-            let directUrl = `https://drive.google.com/uc?export=download&id=${match[1]}`;
-            return `<video id="player-${id}" playsinline controls data-poster="korean-logo.png">
-                        <source src="${directUrl}" type="video/mp4" />
-                    </video>`;
+            let embedUrl = `https://drive.google.com/file/d/${match[1]}/preview`;
+            return `<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 8px;">
+                        <iframe src="${embedUrl}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border:0;" allowfullscreen></iframe>
+                    </div>`;
         }
     }
     
-    // 2. YouTube Link Extraction (Live or Recorded)
+    // 2. YouTube Link Extraction
     let ytId = null;
     if (mediaUrl.includes("youtube.com/live/")) ytId = mediaUrl.split("youtube.com/live/")[1].split("?")[0].split("/")[0];
     else if (mediaUrl.includes("v=")) ytId = new URL(mediaUrl).searchParams.get("v");
@@ -179,7 +178,7 @@ function getPlayerHtml(mediaUrl, id) {
                 </div>`;
     }
 
-    return ''; // If unrecognized format
+    return ''; 
 }
 
 // ================= FIREBASE REAL-TIME LISTENERS =================
@@ -207,7 +206,7 @@ function listenToData() {
             let html = ''; let adminHtml = '';
             snapshot.forEach(doc => {
                 const c = doc.data(); const id = doc.id;
-                const mediaHTML = getPlayerHtml(c.url || c.embedUrl, id); // Works for old and new data
+                const mediaHTML = getPlayerHtml(c.url || c.embedUrl, id); 
                 
                 html += `
                     <div class="card">
@@ -225,7 +224,6 @@ function listenToData() {
             });
             container.innerHTML = html; adminList.innerHTML = adminHtml;
 
-            // INIT PLYR PLAYER ON ALL VIDEOS (Gives 10s skip, speed, full screen)
             const playerElements = document.querySelectorAll('.video-wrapper video, .video-wrapper .plyr__video-embed');
             playerElements.forEach(el => {
                 new Plyr(el, {
@@ -270,12 +268,10 @@ function listenToData() {
 // ================= FULLSCREEN LANDSCAPE ROTATION FIX =================
 document.addEventListener("fullscreenchange", () => {
     if (document.fullscreenElement) {
-        // Lock to landscape when full screen is active
         if (screen.orientation && screen.orientation.lock) {
             screen.orientation.lock("landscape").catch(e => console.log("Orientation lock not supported/allowed", e));
         }
     } else {
-        // Unlock orientation when exiting full screen
         if (screen.orientation && screen.orientation.unlock) {
             screen.orientation.unlock();
         }
