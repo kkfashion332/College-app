@@ -16,15 +16,10 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// Global Delete Function for Admin Panel
 window.deleteItem = async (colName, id) => {
     if(confirm("Are you sure you want to delete this?")) {
-        try {
-            await deleteDoc(doc(db, colName, id));
-        } catch(e) { 
-            console.error(e); 
-            alert("Error deleting item."); 
-        }
+        try { await deleteDoc(doc(db, colName, id)); } 
+        catch(e) { console.error(e); alert("Error deleting item."); }
     }
 };
 
@@ -56,13 +51,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 4500);
 });
 
-const tabBtns = document.querySelectorAll('.tab-btn');
-const tabContents = document.querySelectorAll('.tab-content');
-
+// App Main Tabs
+const tabBtns = document.querySelectorAll('.main-tabs .tab-btn');
+const tabContents = document.querySelectorAll('main .tab-content');
 tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
         tabBtns.forEach(b => b.classList.remove('active'));
         tabContents.forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.target).classList.add('active');
+    });
+});
+
+// Admin Horizontal Tabs
+const adminTabBtns = document.querySelectorAll('.admin-tabs-nav .admin-tab-btn');
+const adminTabContents = document.querySelectorAll('.admin-scroll-wrapper .admin-card');
+adminTabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        adminTabBtns.forEach(b => b.classList.remove('active'));
+        adminTabContents.forEach(c => c.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById(btn.dataset.target).classList.add('active');
     });
@@ -92,140 +99,105 @@ document.getElementById('submit-pin').addEventListener('click', () => {
     if(pinInput.value === '7890') {
         pinModal.style.display = 'none';
         adminPanel.style.display = 'flex';
-    } else {
-        alert("Incorrect PIN!");
-        pinInput.value = '';
-    }
+    } else { alert("Incorrect PIN!"); pinInput.value = ''; }
 });
 document.getElementById('close-admin').addEventListener('click', () => adminPanel.style.display = 'none');
 
-
-// ================= FIREBASE DATABASE (Add Data) =================
-
-// [UPDATED] YouTube Live, Normal & Google Drive Link Parser Function
-function getMediaEmbedUrl(url) {
-    if (!url) return null;
-    
-    try {
-        // 1. Check for Google Drive Link
-        if (url.includes("drive.google.com")) {
-            const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-            if (match && match[1]) {
-                return `https://drive.google.com/file/d/${match[1]}/preview`;
-            }
-        }
-        
-        // 2. Check for YouTube Links
-        let videoId = null;
-        if (url.includes("youtube.com/live/")) {
-            videoId = url.split("youtube.com/live/")[1].split("?")[0].split("/")[0];
-        } else if (url.includes("v=")) {
-            videoId = new URL(url).searchParams.get("v");
-        } else if (url.includes("youtu.be/")) {
-            videoId = url.split("youtu.be/")[1].split("?")[0].split("/")[0];
-        } else if (url.includes("youtube.com/embed/")) {
-            return url; // Pehle se hi embed link hai
-        }
-        
-        if (videoId) {
-            // fs=1 button enforce karega player me
-            return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&fs=1`; 
-        }
-    } catch(e) {
-        console.error("URL Format mismatch", e);
-    }
-    
-    return null;
-}
-
-// 1. Add Class (UPDATED to use new function)
+// ================= FIREBASE DATABASE ADD =================
 document.getElementById('btn-add-class').addEventListener('click', async () => {
     const title = document.getElementById('class-title').value;
-    const url = document.getElementById('class-url').value;
+    const url = document.getElementById('class-url').value; // We store raw URL, parser will handle it
     const date = document.getElementById('class-date').value;
     const start = document.getElementById('class-start').value;
     const end = document.getElementById('class-end').value;
 
-    const embedUrl = getMediaEmbedUrl(url);
-    if(!title || !embedUrl) return alert("Title & Valid YouTube/Drive URL required!");
-
+    if(!title || !url) return alert("Title & Valid URL required!");
     try {
-        await addDoc(collection(db, "classes"), { title, embedUrl, date, start, end, timestamp: Date.now() });
+        await addDoc(collection(db, "classes"), { title, url, date, start, end, timestamp: Date.now() });
         document.getElementById('class-title').value = '';
         document.getElementById('class-url').value = '';
     } catch(e) { alert("Failed to add"); }
 });
 
-// 2. Add PDF Note (Direct Link)
 document.getElementById('btn-add-pdf').addEventListener('click', async () => {
     const title = document.getElementById('pdf-title').value;
     const pdfUrl = document.getElementById('pdf-url').value;
-    
     if(!title || !pdfUrl) return alert("Title and PDF URL required!");
-
     try {
         await addDoc(collection(db, "pdfs"), { title, pdfUrl, timestamp: Date.now() });
-        document.getElementById('pdf-title').value = '';
-        document.getElementById('pdf-url').value = '';
+        document.getElementById('pdf-title').value = ''; document.getElementById('pdf-url').value = '';
     } catch(e) { alert("Failed to add"); }
 });
 
-// 3. Add Announcement (With Optional Banner)
 document.getElementById('btn-add-ann').addEventListener('click', async () => {
     const title = document.getElementById('ann-title').value;
     const bannerUrl = document.getElementById('ann-banner').value;
     const text = document.getElementById('ann-text').value;
-    
     if(!title || !text) return alert("Title and Message required!");
-
     try {
         await addDoc(collection(db, "announcements"), { title, bannerUrl, text, date: new Date().toLocaleDateString(), timestamp: Date.now() });
-        document.getElementById('ann-title').value = '';
-        document.getElementById('ann-banner').value = '';
-        document.getElementById('ann-text').value = '';
+        document.getElementById('ann-title').value = ''; document.getElementById('ann-banner').value = ''; document.getElementById('ann-text').value = '';
     } catch(e) { alert("Failed to add"); }
 });
 
-// 4. Add Home Banner
 document.getElementById('btn-add-banner').addEventListener('click', async () => {
     const imgUrl = document.getElementById('banner-img').value;
     const linkUrl = document.getElementById('banner-link').value;
-    
     if(!imgUrl) return alert("Banner Image URL required!");
-
     try {
         await addDoc(collection(db, "banners"), { imgUrl, linkUrl, timestamp: Date.now() });
-        document.getElementById('banner-img').value = '';
-        document.getElementById('banner-link').value = '';
+        document.getElementById('banner-img').value = ''; document.getElementById('banner-link').value = '';
     } catch(e) { alert("Failed to add"); }
 });
 
+// ================= URL PARSER FOR PLAYER =================
+function getPlayerHtml(mediaUrl, id) {
+    if(!mediaUrl) return '';
+    
+    // 1. Google Drive Link extraction
+    if (mediaUrl.includes("drive.google.com")) {
+        const match = mediaUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (match && match[1]) {
+            // Converts drive link into direct MP4 stream for the video player
+            let directUrl = `https://drive.google.com/uc?export=download&id=${match[1]}`;
+            return `<video id="player-${id}" playsinline controls data-poster="korean-logo.png">
+                        <source src="${directUrl}" type="video/mp4" />
+                    </video>`;
+        }
+    }
+    
+    // 2. YouTube Link Extraction (Live or Recorded)
+    let ytId = null;
+    if (mediaUrl.includes("youtube.com/live/")) ytId = mediaUrl.split("youtube.com/live/")[1].split("?")[0].split("/")[0];
+    else if (mediaUrl.includes("v=")) ytId = new URL(mediaUrl).searchParams.get("v");
+    else if (mediaUrl.includes("youtu.be/")) ytId = mediaUrl.split("youtu.be/")[1].split("?")[0].split("/")[0];
+    else if (mediaUrl.includes("embed/")) ytId = mediaUrl.split("embed/")[1].split("?")[0];
+
+    if (ytId) {
+        return `<div class="plyr__video-embed" id="player-${id}">
+                    <iframe src="https://www.youtube.com/embed/${ytId}?origin=https://plyr.io&amp;iv_load_policy=3&amp;modestbranding=1&amp;playsinline=1&amp;showinfo=0&amp;rel=0&amp;enablejsapi=1" allowfullscreen allowtransparency allow="autoplay"></iframe>
+                </div>`;
+    }
+
+    return ''; // If unrecognized format
+}
 
 // ================= FIREBASE REAL-TIME LISTENERS =================
 function listenToData() {
     
-    // Banners
     onSnapshot(query(collection(db, "banners"), orderBy("timestamp", "desc")), (snapshot) => {
         const container = document.getElementById('banner-container');
         const adminList = document.getElementById('admin-banner-list');
-        
         let html = ''; let adminHtml = '';
         snapshot.forEach(doc => {
             const b = doc.data(); const id = doc.id;
-            html += `<a href="${b.linkUrl || '#'}" class="banner" target="${b.linkUrl ? '_blank' : '_self'}">
-                        <img src="${b.imgUrl}" alt="Banner">
-                     </a>`;
-            adminHtml += `<div class="admin-list-item">
-                            <img src="${b.imgUrl}" class="admin-item-img">
-                            <button class="del-btn" onclick="deleteItem('banners', '${id}')">Delete</button>
-                          </div>`;
+            html += `<a href="${b.linkUrl || '#'}" class="banner" target="${b.linkUrl ? '_blank' : '_self'}"><img src="${b.imgUrl}" alt="Banner"></a>`;
+            adminHtml += `<div class="admin-list-item"><img src="${b.imgUrl}" class="admin-item-img"><button class="del-btn" onclick="deleteItem('banners', '${id}')">Delete</button></div>`;
         });
-        
         if(snapshot.empty) { container.style.display = 'none'; adminList.innerHTML = '<div class="empty-msg">No banners</div>'; } 
         else { container.style.display = 'flex'; container.innerHTML = html; adminList.innerHTML = adminHtml; }
     });
 
-    // Classes (UPDATED IFRAME ATTRIBUTES FOR FULLSCREEN FIX)
     onSnapshot(query(collection(db, "classes"), orderBy("timestamp", "desc")), (snapshot) => {
         const container = document.getElementById('classes-list');
         const adminList = document.getElementById('admin-class-list');
@@ -235,12 +207,13 @@ function listenToData() {
             let html = ''; let adminHtml = '';
             snapshot.forEach(doc => {
                 const c = doc.data(); const id = doc.id;
+                const mediaHTML = getPlayerHtml(c.url || c.embedUrl, id); // Works for old and new data
+                
                 html += `
                     <div class="card">
                         <h3 class="card-title">${c.title}</h3>
                         <div class="video-wrapper">
-                            <!-- Fullscreen Attributes Added Below -->
-                            <iframe src="${c.embedUrl}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true"></iframe>
+                            ${mediaHTML}
                         </div>
                         <div class="class-meta">
                             ${c.date ? `<span>📅 ${c.date}</span>` : ''}
@@ -248,77 +221,61 @@ function listenToData() {
                             ${c.end ? `<span>🔴 Ended: ${c.end}</span>` : ''}
                         </div>
                     </div>`;
-                adminHtml += `<div class="admin-list-item">
-                                <span class="admin-item-text">${c.title}</span>
-                                <button class="del-btn" onclick="deleteItem('classes', '${id}')">Delete</button>
-                              </div>`;
+                adminHtml += `<div class="admin-list-item"><span class="admin-item-text">${c.title}</span><button class="del-btn" onclick="deleteItem('classes', '${id}')">Delete</button></div>`;
             });
             container.innerHTML = html; adminList.innerHTML = adminHtml;
+
+            // INIT PLYR PLAYER ON ALL VIDEOS (Gives 10s skip, speed, full screen)
+            const playerElements = document.querySelectorAll('.video-wrapper video, .video-wrapper .plyr__video-embed');
+            playerElements.forEach(el => {
+                new Plyr(el, {
+                    controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'settings', 'pip', 'airplay', 'fullscreen'],
+                    settings: ['quality', 'speed']
+                });
+            });
         }
     });
 
-    // PDFs (Vertical List Style)
     onSnapshot(query(collection(db, "pdfs"), orderBy("timestamp", "desc")), (snapshot) => {
         const container = document.getElementById('pdfs-list');
         const adminList = document.getElementById('admin-pdf-list');
-        
         if(snapshot.empty) { container.innerHTML = '<div class="empty-msg">No notes available.</div>'; adminList.innerHTML = '<div class="empty-msg">No notes</div>'; }
         else {
             let html = ''; let adminHtml = '';
             snapshot.forEach(doc => {
                 const p = doc.data(); const id = doc.id;
-                html += `
-                    <a href="${p.pdfUrl}" target="_blank" class="pdf-item">
-                        <div class="pdf-item-left">
-                            <div class="pdf-icon-circle">📄</div>
-                            <span class="pdf-title-text">${p.title}</span>
-                        </div>
-                        <span class="pdf-open-btn">View PDF</span>
-                    </a>`;
-                adminHtml += `<div class="admin-list-item">
-                                <span class="admin-item-text">${p.title}</span>
-                                <button class="del-btn" onclick="deleteItem('pdfs', '${id}')">Delete</button>
-                              </div>`;
+                html += `<a href="${p.pdfUrl}" target="_blank" class="pdf-item"><div class="pdf-item-left"><div class="pdf-icon-circle">📄</div><span class="pdf-title-text">${p.title}</span></div><span class="pdf-open-btn">View PDF</span></a>`;
+                adminHtml += `<div class="admin-list-item"><span class="admin-item-text">${p.title}</span><button class="del-btn" onclick="deleteItem('pdfs', '${id}')">Delete</button></div>`;
             });
             container.innerHTML = html; adminList.innerHTML = adminHtml;
         }
     });
 
-    // Announcements
     onSnapshot(query(collection(db, "announcements"), orderBy("timestamp", "desc")), (snapshot) => {
         const container = document.getElementById('announcements-list');
         const adminList = document.getElementById('admin-ann-list');
-        
         if(snapshot.empty) { container.innerHTML = '<div class="empty-msg">No recent announcements.</div>'; adminList.innerHTML = '<div class="empty-msg">No announcements</div>'; }
         else {
             let html = ''; let adminHtml = '';
             snapshot.forEach(doc => {
                 const a = doc.data(); const id = doc.id;
-                html += `
-                    <div class="card">
-                        <h3 class="card-title">📢 ${a.title}</h3>
-                        ${a.bannerUrl ? `<img src="${a.bannerUrl}" class="ann-banner-img" alt="Announcement Banner">` : ''}
-                        <div class="ann-text">${a.text}</div>
-                        <span class="ann-date">Posted on: ${a.date}</span>
-                    </div>`;
-                adminHtml += `<div class="admin-list-item">
-                                <span class="admin-item-text">${a.title}</span>
-                                <button class="del-btn" onclick="deleteItem('announcements', '${id}')">Delete</button>
-                              </div>`;
+                html += `<div class="card"><h3 class="card-title">📢 ${a.title}</h3>${a.bannerUrl ? `<img src="${a.bannerUrl}" class="ann-banner-img" alt="Announcement Banner">` : ''}<div class="ann-text">${a.text}</div><span class="ann-date">Posted on: ${a.date}</span></div>`;
+                adminHtml += `<div class="admin-list-item"><span class="admin-item-text">${a.title}</span><button class="del-btn" onclick="deleteItem('announcements', '${id}')">Delete</button></div>`;
             });
             container.innerHTML = html; adminList.innerHTML = adminHtml;
         }
     });
 }
 
-// ================= FULLSCREEN ROTATION FIX =================
-// Jaise hi koi user video ko full screen karega, yeh code screen ko Landscape me ghuma dega
+// ================= FULLSCREEN LANDSCAPE ROTATION FIX =================
 document.addEventListener("fullscreenchange", () => {
     if (document.fullscreenElement) {
+        // Lock to landscape when full screen is active
         if (screen.orientation && screen.orientation.lock) {
-            screen.orientation.lock("landscape").catch(e => console.log("Orientation lock not supported by browser", e));
+            screen.orientation.lock("landscape").catch(e => console.log("Orientation lock not supported/allowed", e));
         }
     } else {
+        // Unlock orientation when exiting full screen
         if (screen.orientation && screen.orientation.unlock) {
             screen.orientation.unlock();
         }
