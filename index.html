@@ -7,6 +7,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Inter:wght@300;400;600&family=Noto+Serif+KR:wght@400;700&family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
+    
+    <!-- Plyr Video Player CSS (For 10s skip, speed control & full screen) -->
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -44,11 +48,9 @@
         <!-- Header -->
         <header>
             <div class="header-left">
-                <!-- 7 baar tap karne ke liye logo -->
                 <img src="korean-logo.png" id="secret-logo" alt="Logo" onerror="this.src='https://via.placeholder.com/50/0b1024/d4b062?text=L'">
                 <h2 class="brand-text gold-shimmer">OWN CLASS ROOM</h2>
             </div>
-            <!-- Download Button -->
             <a href="https://drive.google.com/file/d/1rziTLqUP_jCb0PcSZED5WrSIlO_t6ZNT/view?usp=drivesdk" target="_blank" class="download-btn-top" title="Download App">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -58,10 +60,7 @@
             </a>
         </header>
 
-        <!-- Top Banners Section -->
-        <div class="banner-slider" id="banner-container">
-            <!-- Banners JS se aayenge -->
-        </div>
+        <div class="banner-slider" id="banner-container"></div>
 
         <!-- Navigation Tabs -->
         <nav class="main-tabs">
@@ -76,30 +75,24 @@
             </button>
         </nav>
 
-        <!-- Content Sections -->
         <main class="content-area">
-            
-            <!-- Classes Tab -->
             <section id="classes-sec" class="tab-content active">
                 <div id="classes-list" class="grid-layout">
                     <div class="empty-msg">Loading classes...</div>
                 </div>
             </section>
 
-            <!-- PDF Tab (Vertical List) -->
             <section id="pdfs-sec" class="tab-content">
                 <div id="pdfs-list" class="vertical-list">
                     <div class="empty-msg">Loading notes...</div>
                 </div>
             </section>
 
-            <!-- Announcements Tab -->
             <section id="announcements-sec" class="tab-content">
                 <div id="announcements-list" class="grid-layout">
                     <div class="empty-msg">Loading announcements...</div>
                 </div>
             </section>
-
         </main>
     </div>
 
@@ -120,58 +113,66 @@
     <div id="admin-panel" style="display: none;">
         <header class="admin-header">
             <h2>Admin Dashboard</h2>
-            <button id="close-admin" class="btn outline">Exit Dashboard</button>
+            <button id="close-admin" class="btn outline">Exit</button>
         </header>
         
+        <!-- Horizontal Options for Admin -->
+        <div class="admin-tabs-nav">
+            <button class="admin-tab-btn active" data-target="admin-class-opt">🎥 Classes</button>
+            <button class="admin-tab-btn" data-target="admin-pdf-opt">📚 Notes</button>
+            <button class="admin-tab-btn" data-target="admin-ann-opt">🔔 Announce</button>
+            <button class="admin-tab-btn" data-target="admin-banner-opt">🖼️ Banners</button>
+        </div>
+
         <div class="admin-scroll-wrapper">
-            <div class="admin-grid">
-                
-                <!-- Add Banner -->
-                <div class="admin-card">
-                    <h3>Manage Home Banners</h3>
-                    <input type="text" id="banner-img" placeholder="Banner Image URL">
-                    <input type="text" id="banner-link" placeholder="Click Link URL (Optional)">
-                    <button id="btn-add-banner" class="btn gold w-100">Add Banner</button>
-                    <div class="admin-list-container" id="admin-banner-list"></div>
+            
+            <!-- Classes Option -->
+            <div id="admin-class-opt" class="admin-card active">
+                <h3>Manage Video Classes</h3>
+                <input type="text" id="class-title" placeholder="Class Title">
+                <input type="text" id="class-url" placeholder="YouTube / Google Drive URL">
+                <input type="date" id="class-date">
+                <div class="time-flex">
+                    <input type="time" id="class-start" title="Start Time">
+                    <input type="time" id="class-end" title="End Time">
                 </div>
-
-                <!-- Add Class -->
-                <div class="admin-card">
-                    <h3>Manage Video Classes</h3>
-                    <input type="text" id="class-title" placeholder="Class Title">
-                    <input type="text" id="class-url" placeholder="YouTube / Google Drive URL">
-                    <input type="date" id="class-date">
-                    <div class="time-flex">
-                        <input type="time" id="class-start" title="Start Time">
-                        <input type="time" id="class-end" title="End Time">
-                    </div>
-                    <button id="btn-add-class" class="btn gold w-100">Add Class</button>
-                    <div class="admin-list-container" id="admin-class-list"></div>
-                </div>
-
-                <!-- Add PDF -->
-                <div class="admin-card">
-                    <h3>Manage Notes (PDFs)</h3>
-                    <input type="text" id="pdf-title" placeholder="Notes Topic Title (e.g. Lecture 1)">
-                    <input type="text" id="pdf-url" placeholder="Paste Google Drive PDF Link here">
-                    <button id="btn-add-pdf" class="btn gold w-100">Add Notes</button>
-                    <div class="admin-list-container" id="admin-pdf-list"></div>
-                </div>
-
-                <!-- Add Announcement -->
-                <div class="admin-card">
-                    <h3>Manage Announcements</h3>
-                    <input type="text" id="ann-title" placeholder="Announcement Title">
-                    <input type="text" id="ann-banner" placeholder="Banner Image URL (Optional)">
-                    <textarea id="ann-text" rows="3" placeholder="Message details..."></textarea>
-                    <button id="btn-add-ann" class="btn gold w-100">Post Announcement</button>
-                    <div class="admin-list-container" id="admin-ann-list"></div>
-                </div>
-
+                <button id="btn-add-class" class="btn gold w-100">Add Class</button>
+                <div class="admin-list-container" id="admin-class-list"></div>
             </div>
+
+            <!-- Notes Option -->
+            <div id="admin-pdf-opt" class="admin-card">
+                <h3>Manage Notes (PDFs)</h3>
+                <input type="text" id="pdf-title" placeholder="Notes Topic Title">
+                <input type="text" id="pdf-url" placeholder="Google Drive PDF Link">
+                <button id="btn-add-pdf" class="btn gold w-100">Add Notes</button>
+                <div class="admin-list-container" id="admin-pdf-list"></div>
+            </div>
+
+            <!-- Announcements Option -->
+            <div id="admin-ann-opt" class="admin-card">
+                <h3>Manage Announcements</h3>
+                <input type="text" id="ann-title" placeholder="Announcement Title">
+                <input type="text" id="ann-banner" placeholder="Banner Image URL (Optional)">
+                <textarea id="ann-text" rows="3" placeholder="Message details..."></textarea>
+                <button id="btn-add-ann" class="btn gold w-100">Post Announcement</button>
+                <div class="admin-list-container" id="admin-ann-list"></div>
+            </div>
+
+            <!-- Banners Option -->
+            <div id="admin-banner-opt" class="admin-card">
+                <h3>Manage Home Banners</h3>
+                <input type="text" id="banner-img" placeholder="Banner Image URL">
+                <input type="text" id="banner-link" placeholder="Click Link URL (Optional)">
+                <button id="btn-add-banner" class="btn gold w-100">Add Banner</button>
+                <div class="admin-list-container" id="admin-banner-list"></div>
+            </div>
+
         </div>
     </div>
 
+    <!-- Plyr Video Player JS -->
+    <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
     <script type="module" src="app.js"></script>
 </body>
 </html>
