@@ -102,14 +102,43 @@ document.getElementById('close-admin').addEventListener('click', () => adminPane
 
 // ================= FIREBASE DATABASE (Add Data) =================
 
-function getYouTubeEmbedUrl(url) {
-    let videoId = "";
-    if(url.includes('v=')) videoId = url.split('v=')[1].substring(0, 11);
-    else if(url.includes('youtu.be/')) videoId = url.split('youtu.be/')[1].substring(0, 11);
-    return videoId ? `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1` : null;
+// [UPDATED] YouTube Live, Normal & Google Drive Link Parser Function
+function getMediaEmbedUrl(url) {
+    if (!url) return null;
+    
+    try {
+        // 1. Check for Google Drive Link
+        if (url.includes("drive.google.com")) {
+            const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+            if (match && match[1]) {
+                return `https://drive.google.com/file/d/${match[1]}/preview`;
+            }
+        }
+        
+        // 2. Check for YouTube Links
+        let videoId = null;
+        if (url.includes("youtube.com/live/")) {
+            videoId = url.split("youtube.com/live/")[1].split("?")[0].split("/")[0];
+        } else if (url.includes("v=")) {
+            videoId = new URL(url).searchParams.get("v");
+        } else if (url.includes("youtu.be/")) {
+            videoId = url.split("youtu.be/")[1].split("?")[0].split("/")[0];
+        } else if (url.includes("youtube.com/embed/")) {
+            return url; // Pehle se hi embed link hai
+        }
+        
+        if (videoId) {
+            // fs=1 button enforce karega player me
+            return `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&fs=1`; 
+        }
+    } catch(e) {
+        console.error("URL Format mismatch", e);
+    }
+    
+    return null;
 }
 
-// 1. Add Class
+// 1. Add Class (UPDATED to use new function)
 document.getElementById('btn-add-class').addEventListener('click', async () => {
     const title = document.getElementById('class-title').value;
     const url = document.getElementById('class-url').value;
@@ -117,8 +146,8 @@ document.getElementById('btn-add-class').addEventListener('click', async () => {
     const start = document.getElementById('class-start').value;
     const end = document.getElementById('class-end').value;
 
-    const embedUrl = getYouTubeEmbedUrl(url);
-    if(!title || !embedUrl) return alert("Title & Valid YouTube URL required!");
+    const embedUrl = getMediaEmbedUrl(url);
+    if(!title || !embedUrl) return alert("Title & Valid YouTube/Drive URL required!");
 
     try {
         await addDoc(collection(db, "classes"), { title, embedUrl, date, start, end, timestamp: Date.now() });
@@ -196,7 +225,7 @@ function listenToData() {
         else { container.style.display = 'flex'; container.innerHTML = html; adminList.innerHTML = adminHtml; }
     });
 
-    // Classes
+    // Classes (UPDATED IFRAME ATTRIBUTES FOR FULLSCREEN FIX)
     onSnapshot(query(collection(db, "classes"), orderBy("timestamp", "desc")), (snapshot) => {
         const container = document.getElementById('classes-list');
         const adminList = document.getElementById('admin-class-list');
@@ -210,7 +239,8 @@ function listenToData() {
                     <div class="card">
                         <h3 class="card-title">${c.title}</h3>
                         <div class="video-wrapper">
-                            <iframe src="${c.embedUrl}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="allowfullscreen" webkitallowfullscreen="true" mozallowfullscreen="true"></iframe>
+                            <!-- Fullscreen Attributes Added Below -->
+                            <iframe src="${c.embedUrl}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true"></iframe>
                         </div>
                         <div class="class-meta">
                             ${c.date ? `<span>📅 ${c.date}</span>` : ''}
@@ -280,3 +310,17 @@ function listenToData() {
         }
     });
 }
+
+// ================= FULLSCREEN ROTATION FIX =================
+// Jaise hi koi user video ko full screen karega, yeh code screen ko Landscape me ghuma dega
+document.addEventListener("fullscreenchange", () => {
+    if (document.fullscreenElement) {
+        if (screen.orientation && screen.orientation.lock) {
+            screen.orientation.lock("landscape").catch(e => console.log("Orientation lock not supported by browser", e));
+        }
+    } else {
+        if (screen.orientation && screen.orientation.unlock) {
+            screen.orientation.unlock();
+        }
+    }
+});
