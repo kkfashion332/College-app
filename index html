@@ -1,7 +1,7 @@
 import os
 import json
 import time
-from flask import Flask, render_template_string, request, redirect, url_for, session, flash
+from flask import Flask, render_template_string, request, redirect, url_for, session
 import firebase_admin
 from firebase_admin import credentials, firestore
 
@@ -25,6 +25,7 @@ FIREBASE_KEY_JSON_STRING = r"""{
   "universe_domain": "googleapis.com"
 }"""
 
+db = None
 try:
     if not firebase_admin._apps:
         firebase_key_dict = json.loads(FIREBASE_KEY_JSON_STRING)
@@ -36,7 +37,7 @@ except Exception as e:
     print("Firestore Init Error:", e)
 
 # =========================================================
-# ADMIN PANEL HTML (SUPER SMOOTH SPA TABS + RECENT TOP LOGIC)
+# ADMIN PANEL HTML
 # =========================================================
 ADMIN_HTML = """
 <!DOCTYPE html>
@@ -305,14 +306,11 @@ ADMIN_HTML = """
     <!-- SPA TAB LOGIC (SMOOTH SWITCHING) -->
     <script>
         function switchTab(tabId) {
-            // Hide all
             document.querySelectorAll('.tab-content').forEach(el => {
                 el.classList.remove('active');
             });
-            // Show target
             document.getElementById('tab-' + tabId).classList.add('active');
             
-            // Update buttons
             document.querySelectorAll('.tab-btn').forEach(el => {
                 el.classList.remove('border-yellow-500', 'text-yellow-500');
                 el.classList.add('border-transparent', 'text-gray-500');
@@ -321,7 +319,6 @@ ADMIN_HTML = """
             activeBtn.classList.remove('border-transparent', 'text-gray-500');
             activeBtn.classList.add('border-yellow-500', 'text-yellow-500');
             
-            // Change URL without reload
             window.history.pushState({}, '', '/?tab=' + tabId);
         }
 
@@ -338,7 +335,6 @@ ADMIN_HTML = """
             document.getElementById('editModal').style.display = 'none';
         }
 
-        // Run on load
         window.onload = () => {
             const urlParams = new URLSearchParams(window.location.search);
             let tab = urlParams.get('tab') || 'orders';
@@ -362,28 +358,46 @@ def get_timestamp(p):
 
 @app.route('/')
 def admin_dashboard():
-    products = []; orders = []; settings = {}
+    products = []
+    orders = []
+    settings = {}
+    
     if session.get('admin_logged_in'):
+        if db is None:
+            return "Firebase Error! Please check your credentials.", 500
+            
         try:
             for doc in db.collection('products').stream():
-                p = doc.to_dict(); p['id'] = doc.id; products.append(p)
+                p = doc.to_dict()
+                p['id'] = doc.id
+                products.append(p)
+                
             for doc in db.collection('orders').stream():
-                o = doc.to_dict(); o['id'] = doc.id; orders.append(o)
+                o = doc.to_dict()
+                o['id'] = doc.id
+                orders.append(o)
             
-            # Sort Orders
             orders.sort(key=lambda x: x.get('status', ''), reverse=True)
-            # Sort Products (Newest First)
             products.sort(key=get_timestamp, reverse=True)
             
             s_ref = db.collection('settings').document('storeData').get()
             if s_ref.exists:
                 settings = s_ref.to_dict()
             
-            if 'mainCategories' not in settings: settings['mainCategories'] = []
-            if 'banners' not in settings: settings['banners'] = []
+            if 'mainCategories' not in settings:
+                settings['mainCategories'] = []
+            if 'banners' not in settings:
+                settings['banners'] = []
+                
         except Exception as e:
             print("Data Fetch Error:", e)
-    return render_template_string(ADMIN_HTML, products=products, orders=orders, settings=settings)
+            
+    return render_template_string(
+        ADMIN_HTML, 
+        products=products, 
+        orders=orders, 
+        settings=settings
+    )
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -391,20 +405,26 @@ def login():
     password = request.form.get('password')
     if email == "monubhaipvr@gmail.com" and password == "monu@pvr":
         session['admin_logged_in'] = True
-        return redirect(url_for('admin_dashboard'))
-    return redirect(url_for('admin_dashboard'))
+        return redirect('/?tab=orders')
+    return redirect('/')
 
 @app.route('/logout')
 def logout():
     session.pop('admin_logged_in', None)
-    return redirect(url_for('admin_dashboard'))
+    return redirect('/')
 
-# --- PRODUCT ROUTES ---
 @app.route('/add_product', methods=['POST'])
 def add_product():
-    if not session.get('admin_logged_in'): return redirect('/')
+    if not session.get('admin_logged_in'): 
+        return redirect('/')
+        
     raw_img = request.form.get('image_url', '')
-    img_list = [u.strip() for u in raw_img.split("|")] if "|" in raw_img else [u.strip() for u in raw_img.split(",")]
+    if "|" in raw_img:
+        img_list = [u.strip() for u in raw_img.split("|")]
+    else:
+        img_list = [u.strip() for u in raw_img.split(",")]
+        
+    in_stock_val = True if request.form.get('in_stock') else False
     
     new_prod = {
         'name': request.form.get('name'),
@@ -413,7 +433,7 @@ def add_product():
         'source': request.form.get('source', 'Unique Fashion'),
         'price': request.form.get('price', 0, type=float),
         'discount': request.form.get('discount', 0, type=float),
-        'inStock': True if request.form.get('in_stock') else False,
+        'inStock': in_stock_val,
         'timestamp': firestore.SERVER_TIMESTAMP
     }
     db.collection('products').add(new_prod)
@@ -422,12 +442,13 @@ def add_product():
 @app.route('/edit_product/<pid>', methods=['POST'])
 def edit_product(pid):
     if session.get('admin_logged_in'):
+        in_stock_val = True if request.form.get('in_stock') else False
         db.collection('products').document(pid).update({
             'name': request.form.get('name'),
             'price': request.form.get('price', 0, type=float),
             'discount': request.form.get('discount', 0, type=float),
             'source': request.form.get('source', 'Unique Fashion'),
-            'inStock': True if request.form.get('in_stock') else False
+            'inStock': in_stock_val
         })
     return redirect('/?tab=products')
 
@@ -437,11 +458,11 @@ def delete_product(pid):
         db.collection('products').document(pid).delete()
     return redirect('/?tab=products')
 
-# --- ORDER ROUTES ---
 @app.route('/update_order_status/<oid>', methods=['POST'])
 def update_order_status(oid):
     if session.get('admin_logged_in'):
-        db.collection('orders').document(oid).update({'status': request.form.get('status')})
+        status_val = request.form.get('status')
+        db.collection('orders').document(oid).update({'status': status_val})
     return redirect('/?tab=orders')
 
 @app.route('/delete_order/<oid>', methods=['POST'])
@@ -450,7 +471,6 @@ def delete_order(oid):
         db.collection('orders').document(oid).delete()
     return redirect('/?tab=orders')
 
-# --- HELPER FUNCTION FOR ARRAYS ---
 def update_storedata_array(array_name, new_item=None, delete_id=None):
     doc_ref = db.collection('settings').document('storeData')
     data = doc_ref.get().to_dict() or {}
@@ -461,12 +481,12 @@ def update_storedata_array(array_name, new_item=None, delete_id=None):
         arr = [item for item in arr if item.get('id') != delete_id]
     doc_ref.set({array_name: arr}, merge=True)
 
-# --- CATEGORY ROUTES ---
 @app.route('/add_category', methods=['POST'])
 def add_category():
     if session.get('admin_logged_in'):
+        cat_id = f"cat_{int(time.time()*1000)}"
         new_cat = {
-            'id': f"cat_{int(time.time()*1000)}", 
+            'id': cat_id, 
             'name': request.form.get('cat_name'), 
             'image': request.form.get('image_url'),
             'shopId': 'GLOBAL'
@@ -480,11 +500,15 @@ def delete_category(cid):
         update_storedata_array('mainCategories', delete_id=cid)
     return redirect('/?tab=categories')
 
-# --- BANNER ROUTES ---
 @app.route('/add_banner', methods=['POST'])
 def add_banner():
     if session.get('admin_logged_in'):
-        new_b = {'id': f"ban_{int(time.time()*1000)}", 'image': request.form.get('image'), 'link': request.form.get('link')}
+        ban_id = f"ban_{int(time.time()*1000)}"
+        new_b = {
+            'id': ban_id, 
+            'image': request.form.get('image'), 
+            'link': request.form.get('link')
+        }
         update_storedata_array('banners', new_item=new_b)
     return redirect('/?tab=banners')
 
@@ -494,7 +518,6 @@ def delete_banner(bid):
         update_storedata_array('banners', delete_id=bid)
     return redirect('/?tab=banners')
 
-# --- SETTINGS ROUTES (UPI, QR, WA) ---
 @app.route('/update_settings', methods=['POST'])
 def update_settings():
     if session.get('admin_logged_in'):
