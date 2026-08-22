@@ -9,9 +9,9 @@ app = Flask(__name__)
 app.secret_key = "kk_fashion_super_secret_key_123"
 
 # =========================================================
-# 🔴 ORIGINAL FIRESTORE KEY
+# 🔴 ORIGINAL FIRESTORE KEY (FIXED DICTIONARY FORMAT)
 # =========================================================
-FIREBASE_KEY_JSON_STRING = r"""{
+FIREBASE_KEY_DICT = {
   "type": "service_account",
   "project_id": "kkfashion-f51ff",
   "private_key_id": "0b0b1fa8bd748a0faec459e140076739972b90e8",
@@ -23,13 +23,12 @@ FIREBASE_KEY_JSON_STRING = r"""{
   "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
   "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40kkfashion-f51ff.iam.gserviceaccount.com",
   "universe_domain": "googleapis.com"
-}"""
+}
 
 db = None
 try:
     if not firebase_admin._apps:
-        firebase_key_dict = json.loads(FIREBASE_KEY_JSON_STRING)
-        cred = credentials.Certificate(firebase_key_dict)
+        cred = credentials.Certificate(FIREBASE_KEY_DICT)
         firebase_admin.initialize_app(cred)
     db = firestore.client()
     print("Firestore Connected Successfully!")
@@ -401,11 +400,13 @@ def admin_dashboard():
 
 @app.route('/login', methods=['POST'])
 def login():
-    email = request.form.get('email')
-    password = request.form.get('password')
+    email = request.form.get('email', '').strip()
+    password = request.form.get('password', '').strip()
+    
     if email == "monubhaipvr@gmail.com" and password == "monu@pvr":
         session['admin_logged_in'] = True
         return redirect('/?tab=orders')
+    
     return redirect('/')
 
 @app.route('/logout')
