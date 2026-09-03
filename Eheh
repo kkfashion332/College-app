@@ -1,452 +1,575 @@
+# -*- coding: utf-8 -*-
+"""
+MZ Fashion - Admin Panel (Flask + Firebase Realtime Database)
+No login. Orders / Products / Categories / Banners / Payment Settings
+"""
+
 import os
+import json
+import traceback
+from datetime import datetime
+
 import firebase_admin
 from firebase_admin import credentials, db
-from flask import Flask, render_template_string, request, redirect, session, flash
+from flask import Flask, render_template_string, request, redirect, url_for, flash
+
+# ----------------------------------------------------------------------------
+# CONFIG
+# ----------------------------------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Service account JSON ka path. Home folder me rakha hai to:
+CRED_PATH = os.environ.get(
+    "FIREBASE_CRED_PATH",
+    os.path.join(os.path.expanduser("~"), "serviceAccountKey.json"),
+)
+
+DB_URL = os.environ.get(
+    "FIREBASE_DB_URL",
+    "https://mzfashion-default-rtdb.firebaseio.com",
+)
 
 app = Flask(__name__)
-app.secret_key = 'mz_fashion_super_secret_key_123'
+app.secret_key = os.environ.get("SECRET_KEY", "mz-fashion-admin-secret-change-me")
 
-# ==========================================
-# FIREBASE SETUP
-# ==========================================
-# Ensure you upload 'serviceAccountKey.json' in the same folder
-cred = credentials.Certificate(os.path.join(os.path.dirname(__file__), 'serviceAccountKey.json'))
-firebase_admin.initialize_app(cred, {
-    'databaseURL': 'https://mzfashion-default-rtdb.firebaseio.com/'
-})
+# ----------------------------------------------------------------------------
+# FIREBASE INIT (safe, sirf ek baar)
+# ----------------------------------------------------------------------------
+FIREBASE_ERROR = None
 
-# ==========================================
-# ADMIN CREDENTIALS
-# ==========================================
-ADMIN_USER = "admin"
-ADMIN_PASS = "mzfashion@123"
 
-# ==========================================
-# HTML TEMPLATE (Frontend of Admin Panel)
-# ==========================================
-ADMIN_HTML = """
+def init_firebase():
+    global FIREBASE_ERROR
+    try:
+        if not firebase_admin._apps:
+            if not os.path.exists(CRED_PATH):
+                raise FileNotFoundError(
+                    "serviceAccountKey.json nahi mila: %s" % CRED_PATH
+                )
+            cred = credentials.Certificate(CRED_PATH)
+            firebase_admin.initialize_app(cred, {"databaseURL": DB_URL})
+        FIREBASE_ERROR = None
+        return True
+    except Exception as e:
+        FIREBASE_ERROR = "%s: %s" % (type(e).__name__, e)
+        traceback.print_exc()
+        return False
+
+
+init_firebase()
+
+
+def ref(path):
+    if not firebase_admin._apps:
+        if not init_firebase():
+            raise RuntimeError(FIREBASE_ERROR or "Firebase init failed")
+    return db.reference(path)
+
+
+def as_list(node_path, sort_desc=False):
+    """RTDB dict ko list of dicts (key ke saath) me badalta hai."""
+    try:
+        data = ref(node_path).get() or {}
+    except Exception as e:
+        print("READ ERROR", node_path, e)
+        return []
+    if isinstance(data, list):  # RTDB kabhi list de deta hai
+        data = {str(i): v for i, v in enumerate(data) if v}
+    items = []
+    for k, v in data.items():
+        if not isinstance(v, dict):
+            continue
+        row = dict(v)
+        row["key"] = k
+        items.append(row)
+    items.sort(key=lambda r: str(r.get("key", "")), reverse=sort_desc)
+    return items
+
+
+def num(value, default=0):
+    try:
+        return float(str(value).replace(",", "").strip())
+    except Exception:
+        return default
+
+
+def money(value):
+    n = num(value)
+    if n == int(n):
+        return str(int(n))
+    return "%.2f" % n
+
+
+# ----------------------------------------------------------------------------
+# TEMPLATE
+# ----------------------------------------------------------------------------
+TEMPLATE = """
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MZ Fashion | Admin Panel</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        body { background-color: #121212; color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .card { background-color: #1e1e1e; border: 1px solid #d4af37; }
-        .text-gold { color: #d4af37 !important; }
-        .bg-gold { background-color: #d4af37 !important; color: #000; }
-        .btn-gold { background-color: #d4af37; color: #000; font-weight: bold; }
-        .btn-gold:hover { background-color: #b5952f; color: #000; }
-        .form-control, .form-select { background-color: #2c2c2c; border: 1px solid #444; color: #fff; }
-        .form-control:focus, .form-select:focus { background-color: #2c2c2c; color: #fff; border-color: #d4af37; box-shadow: none; }
-        .product-img { height: 150px; object-fit: cover; cursor: pointer; transition: 0.3s; }
-        .product-img:hover { opacity: 0.7; transform: scale(1.05); }
-        .nav-link { color: #aaa; }
-        .nav-link.active { color: #d4af37 !important; font-weight: bold; border-bottom: 2px solid #d4af37; }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MZ Fashion - Admin Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#2b2118; --ink-soft:#6b5b4b; --gold:#b9893f; --gold-2:#e0b767;
+    --bg:#faf7f2; --card:#ffffff; --line:#e8dfd2; --danger:#b3261e; --ok:#1e7a48;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:Manrope,system-ui,sans-serif}
+  header{background:linear-gradient(135deg,#2b2118,#4a3826);color:#fff;padding:18px 16px}
+  header h1{font-family:'Playfair Display',serif;margin:0;font-size:22px;letter-spacing:.3px}
+  header p{margin:4px 0 0;font-size:12px;color:#e6d7bf}
+  .wrap{max-width:1100px;margin:0 auto;padding:14px}
+  .tabs{display:flex;gap:8px;overflow-x:auto;padding:12px 0;position:sticky;top:0;background:var(--bg);z-index:5}
+  .tabs a{flex:0 0 auto;text-decoration:none;color:var(--ink-soft);background:#fff;border:1px solid var(--line);
+    padding:9px 14px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap}
+  .tabs a.active{background:linear-gradient(135deg,var(--gold),var(--gold-2));color:#fff;border-color:transparent}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px}
+  .stat b{display:block;font-size:20px;font-family:'Playfair Display',serif}
+  .stat span{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.6px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:14px}
+  .card h2{font-family:'Playfair Display',serif;font-size:17px;margin:0 0 10px}
+  label{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin:8px 0 4px}
+  input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;
+    font-family:inherit;font-size:14px;background:#fffdf9;color:var(--ink)}
+  textarea{min-height:80px;resize:vertical}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+  .btn{display:inline-block;margin-top:12px;padding:11px 18px;border:0;border-radius:10px;cursor:pointer;
+    background:linear-gradient(135deg,var(--gold),var(--gold-2));color:#fff;font-weight:700;font-size:14px;text-decoration:none}
+  .btn.sm{padding:7px 12px;font-size:12px;margin:0}
+  .btn.del{background:#fdeceb;color:var(--danger)}
+  .btn.ghost{background:#f3ece1;color:var(--ink)}
+  .row{display:flex;gap:12px;align-items:center;border-top:1px solid var(--line);padding:12px 0}
+  .row:first-of-type{border-top:0}
+  .row img{width:60px;height:60px;object-fit:cover;border-radius:10px;background:#eee;flex:0 0 auto}
+  .row .meta{flex:1;min-width:0}
+  .row .meta b{display:block;font-size:14px}
+  .row .meta small{display:block;color:var(--ink-soft);font-size:12px;line-height:1.5;word-break:break-word}
+  .flash{padding:10px 14px;border-radius:10px;margin-bottom:10px;font-size:13px;font-weight:600}
+  .flash.ok{background:#e6f4ec;color:var(--ok)}
+  .flash.err{background:#fdeceb;color:var(--danger)}
+  .empty{color:var(--ink-soft);font-size:13px;padding:14px 0}
+  .pill{display:inline-block;background:#f3ece1;color:var(--ink-soft);border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700}
+  footer{text-align:center;color:var(--ink-soft);font-size:11px;padding:22px}
+  @media(max-width:480px){ .row{flex-wrap:wrap} }
+</style>
 </head>
 <body>
-    <!-- Audio for Tik-Tik sound -->
-    <audio id="tikSound" src="https://www.soundjay.com/buttons/sounds/button-09.mp3" preload="auto"></audio>
+<header>
+  <h1>MZ Fashion &mdash; Admin</h1>
+  <p>Firebase Realtime Database &middot; {{ db_url }}</p>
+</header>
 
-    <nav class="navbar navbar-dark bg-dark border-bottom border-warning">
-        <div class="container-fluid">
-            <span class="navbar-brand mb-0 h1 text-gold fw-bold"><i class="fa-solid fa-crown"></i> MZ FASHION ADMIN</span>
-            <a href="/logout" class="btn btn-outline-danger btn-sm click-sound"><i class="fa-solid fa-power-off"></i> Logout</a>
+<div class="wrap">
+
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, m in msgs %}
+      <div class="flash {{ 'err' if cat == 'error' else 'ok' }}">{{ m }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  {% if fb_error %}
+    <div class="flash err">Firebase connect nahi hua &rarr; {{ fb_error }}</div>
+  {% endif %}
+
+  <div class="stats">
+    <div class="stat"><b>{{ orders|length }}</b><span>Orders</span></div>
+    <div class="stat"><b>{{ products|length }}</b><span>Products</span></div>
+    <div class="stat"><b>{{ categories|length }}</b><span>Categories</span></div>
+    <div class="stat"><b>{{ banners|length }}</b><span>Banners</span></div>
+    <div class="stat"><b>&#8377;{{ revenue }}</b><span>Total Value</span></div>
+  </div>
+
+  <nav class="tabs">
+    {% for key, label in tabs %}
+      <a href="{{ url_for('index', tab=key) }}" class="{{ 'active' if tab == key else '' }}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+
+  <!-- ORDERS -->
+  {% if tab == 'orders' %}
+  <div class="card">
+    <h2>Orders ({{ orders|length }})</h2>
+    {% if not orders %}<div class="empty">Koi order nahi hai.</div>{% endif %}
+    {% for o in orders %}
+      <div class="row">
+        <img src="{{ o.img or placeholder }}" alt="{{ o.product_name or 'product' }}" loading="lazy">
+        <div class="meta">
+          <b>{{ o.product_name or 'Product' }} &nbsp;<span class="pill">&#8377;{{ o._price }}</span></b>
+          <small>
+            {{ o.name or '-' }} &middot; {{ o.phone or '-' }}<br>
+            {{ o.address or '-' }}<br>
+            Payment: {{ o.payment or '-' }} &middot; {{ o.date or '-' }}
+          </small>
         </div>
-    </nav>
+        <form method="post" action="{{ url_for('delete_item') }}" onsubmit="return confirm('Order delete karna hai?')">
+          <input type="hidden" name="node" value="orders">
+          <input type="hidden" name="key" value="{{ o.key }}">
+          <input type="hidden" name="tab" value="orders">
+          <button class="btn sm del" type="submit">Delete</button>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
 
-    <div class="container mt-4 pb-5">
-        {% if get_flashed_messages() %}
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                {{ get_flashed_messages()[0] }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        {% endif %}
-
-        <ul class="nav nav-tabs mb-4" id="adminTabs">
-            <li class="nav-item"><a class="nav-link active click-sound" data-bs-toggle="tab" href="#orders">Orders</a></li>
-            <li class="nav-item"><a class="nav-link click-sound" data-bs-toggle="tab" href="#products">Products</a></li>
-            <li class="nav-item"><a class="nav-link click-sound" data-bs-toggle="tab" href="#categories">Categories</a></li>
-            <li class="nav-item"><a class="nav-link click-sound" data-bs-toggle="tab" href="#banners">Banners</a></li>
-            <li class="nav-item"><a class="nav-link click-sound" data-bs-toggle="tab" href="#settings">Settings</a></li>
-        </ul>
-
-        <div class="tab-content">
-            <!-- ORDERS TAB -->
-            <div class="tab-pane fade show active" id="orders">
-                <h3 class="text-gold mb-3">Live Orders</h3>
-                <div class="row">
-                    {% for key, order in orders.items() %}
-                    <div class="col-md-6 mb-3">
-                        <div class="card p-3">
-                            <div class="d-flex justify-content-between">
-                                <h5 class="text-gold">{{ order.name }}</h5>
-                                <span class="badge bg-secondary">{{ order.payment }}</span>
-                            </div>
-                            <p class="mb-1 small text-muted">{{ order.date }}</p>
-                            <p class="mb-1"><i class="fa-solid fa-phone"></i> {{ order.phone }}</p>
-                            <p class="mb-1"><i class="fa-solid fa-location-dot"></i> {{ order.address }}</p>
-                            <hr class="my-2 border-secondary">
-                            <p class="mb-1 fw-bold">{{ order.product_name }}</p>
-                            <h4 class="text-success">₹{{ order.price }}</h4>
-                            <form action="/delete_order" method="POST" class="mt-2">
-                                <input type="hidden" name="id" value="{{ key }}">
-                                <button type="submit" class="btn btn-sm btn-danger click-sound" onclick="return confirm('Delete this order?')"><i class="fa-solid fa-trash"></i> Delete Order</button>
-                            </form>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-
-            <!-- PRODUCTS TAB -->
-            <div class="tab-pane fade" id="products">
-                <div class="d-flex justify-content-between mb-3">
-                    <h3 class="text-gold">Manage Products</h3>
-                    <button class="btn btn-gold click-sound" data-bs-toggle="modal" data-bs-target="#addProductModal"><i class="fa-solid fa-plus"></i> Add Product</button>
-                </div>
-                <div class="row">
-                    {% for key, p in products.items() %}
-                    <div class="col-6 col-md-3 mb-4 text-center">
-                        <div class="card h-100 position-relative overflow-hidden">
-                            <!-- Click Image to Edit -->
-                            <img src="{{ p.img.split(',')[0] if ',' in p.img else p.img }}" class="card-img-top product-img click-sound" title="Click to Edit" onclick="editProduct('{{ key }}', '{{ p.name }}', '{{ p.price }}', '{{ p.mrp }}', '{{ p.discount }}', '{{ p.category }}', '{{ p.img }}', '{{ p.shirtSizes }}', '{{ p.jeansSizes }}')">
-                            <div class="card-body p-2">
-                                <h6 class="card-title text-truncate small mb-1">{{ p.name }}</h6>
-                                <p class="text-gold fw-bold mb-0">₹{{ p.price }}</p>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-
-            <!-- CATEGORIES TAB -->
-            <div class="tab-pane fade" id="categories">
-                <div class="d-flex justify-content-between mb-3">
-                    <h3 class="text-gold">Categories</h3>
-                    <button class="btn btn-gold click-sound" data-bs-toggle="modal" data-bs-target="#addCategoryModal"><i class="fa-solid fa-plus"></i> Add Category</button>
-                </div>
-                <div class="row">
-                    {% for key, c in categories.items() %}
-                    <div class="col-md-3 mb-3">
-                        <div class="card p-2 text-center">
-                            <img src="{{ c.img }}" class="rounded-circle mx-auto mb-2 border border-warning" style="width: 80px; height: 80px; object-fit: cover;">
-                            <h5>{{ c.name }}</h5>
-                            <form action="/delete_category" method="POST">
-                                <input type="hidden" name="id" value="{{ key }}">
-                                <button type="submit" class="btn btn-sm btn-danger mt-2 click-sound"><i class="fa-solid fa-trash"></i></button>
-                            </form>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-
-            <!-- BANNERS TAB -->
-            <div class="tab-pane fade" id="banners">
-                <div class="d-flex justify-content-between mb-3">
-                    <h3 class="text-gold">Banners (Swipeable)</h3>
-                    <button class="btn btn-gold click-sound" data-bs-toggle="modal" data-bs-target="#addBannerModal"><i class="fa-solid fa-plus"></i> Add Banner</button>
-                </div>
-                <div class="row">
-                    {% for key, b in banners.items() %}
-                    <div class="col-md-6 mb-3">
-                        <div class="card">
-                            <img src="{{ b.img }}" class="card-img-top" style="height: 150px; object-fit: cover;">
-                            <div class="card-body">
-                                <p class="small text-muted mb-2">Target Link: {{ b.target_link }}</p>
-                                <form action="/delete_banner" method="POST">
-                                    <input type="hidden" name="id" value="{{ key }}">
-                                    <button type="submit" class="btn btn-sm btn-danger click-sound"><i class="fa-solid fa-trash"></i> Remove</button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-
-            <!-- SETTINGS TAB -->
-            <div class="tab-pane fade" id="settings">
-                <h3 class="text-gold mb-3">Payment & Support Settings</h3>
-                <div class="card p-4 col-md-8">
-                    <form action="/update_settings" method="POST">
-                        <div class="mb-3">
-                            <label>Payment QR Code Image URL</label>
-                            <input type="text" class="form-control" name="qr_url" value="{{ settings.qr_url }}" required>
-                        </div>
-                        <div class="mb-3">
-                            <label>UPI ID</label>
-                            <input type="text" class="form-control" name="upi_id" value="{{ settings.upi_id }}" required>
-                        </div>
-                        <div class="mb-3">
-                            <label>WhatsApp Number (With Country Code e.g., 91998...)</label>
-                            <input type="text" class="form-control" name="whatsapp" value="{{ settings.whatsapp }}" required>
-                        </div>
-                        <button type="submit" class="btn btn-gold click-sound w-100"><i class="fa-solid fa-save"></i> Save Settings</button>
-                    </form>
-                </div>
-            </div>
+  <!-- PRODUCTS -->
+  {% if tab == 'products' %}
+  <div class="card">
+    <h2>{{ 'Edit Product' if edit_product else 'Add Product' }}</h2>
+    <form method="post" action="{{ url_for('save_product') }}">
+      <input type="hidden" name="key" value="{{ edit_product.key if edit_product else '' }}">
+      <div class="grid2">
+        <div>
+          <label>Product Name *</label>
+          <input name="name" required value="{{ edit_product.name if edit_product else '' }}">
         </div>
-    </div>
-
-    <!-- ADD PRODUCT MODAL -->
-    <div class="modal fade text-dark" id="addProductModal">
-        <div class="modal-dialog">
-            <div class="modal-content bg-dark text-light border-warning">
-                <form action="/add_product" method="POST">
-                    <div class="modal-header border-warning"><h5 class="text-gold">Add New Product</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-                    <div class="modal-body">
-                        <input type="text" name="name" class="form-control mb-2" placeholder="Product Name" required>
-                        <div class="row">
-                            <div class="col"><input type="number" name="price" class="form-control mb-2" placeholder="Selling Price (₹)" required></div>
-                            <div class="col"><input type="number" name="mrp" class="form-control mb-2" placeholder="M.R.P (₹)" required></div>
-                        </div>
-                        <input type="text" name="discount" class="form-control mb-2" placeholder="Discount Text (e.g. 50% OFF)" required>
-                        
-                        <select name="category" class="form-select mb-2" required>
-                            <option value="">Select Category...</option>
-                            {% for key, c in categories.items() %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}
-                        </select>
-                        
-                        <label class="small text-warning">Image URLs (Comma separated for multiple)</label>
-                        <textarea name="img" class="form-control mb-2" rows="2" placeholder="https://image1.jpg, https://image2.jpg" required></textarea>
-                        
-                        <label class="small text-warning">Shirt Sizes (Comma separated)</label>
-                        <input type="text" name="shirtSizes" class="form-control mb-2" placeholder="S, M, L, XL, XXL (Leave blank if not shirt)">
-                        
-                        <label class="small text-warning">Jeans Sizes (Comma separated)</label>
-                        <input type="text" name="jeansSizes" class="form-control mb-2" placeholder="28, 30, 32, 34, 36 (Leave blank if not jeans)">
-                        <p class="text-muted small">Note: If you fill BOTH sizes, it automatically becomes a COMBO.</p>
-                    </div>
-                    <div class="modal-footer border-warning"><button type="submit" class="btn btn-gold click-sound w-100">Add Product</button></div>
-                </form>
-            </div>
+        <div>
+          <label>Category</label>
+          <select name="category">
+            <option value="">-- select --</option>
+            {% for c in categories %}
+              <option value="{{ c.name }}" {{ 'selected' if edit_product and edit_product.category == c.name else '' }}>{{ c.name }}</option>
+            {% endfor %}
+          </select>
         </div>
-    </div>
-
-    <!-- EDIT PRODUCT MODAL -->
-    <div class="modal fade text-dark" id="editProductModal">
-        <div class="modal-dialog">
-            <div class="modal-content bg-dark text-light border-warning">
-                <form action="/edit_product" method="POST">
-                    <input type="hidden" name="id" id="edit_id">
-                    <div class="modal-header border-warning"><h5 class="text-gold">Edit Product</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-                    <div class="modal-body">
-                        <input type="text" name="name" id="edit_name" class="form-control mb-2" required>
-                        <div class="row">
-                            <div class="col"><input type="number" name="price" id="edit_price" class="form-control mb-2" required></div>
-                            <div class="col"><input type="number" name="mrp" id="edit_mrp" class="form-control mb-2" required></div>
-                        </div>
-                        <input type="text" name="discount" id="edit_discount" class="form-control mb-2" required>
-                        <select name="category" id="edit_category" class="form-select mb-2" required>
-                            {% for key, c in categories.items() %}<option value="{{ c.name }}">{{ c.name }}</option>{% endfor %}
-                        </select>
-                        <textarea name="img" id="edit_img" class="form-control mb-2" rows="2" required></textarea>
-                        <input type="text" name="shirtSizes" id="edit_shirtSizes" class="form-control mb-2" placeholder="Shirt Sizes">
-                        <input type="text" name="jeansSizes" id="edit_jeansSizes" class="form-control mb-2" placeholder="Jeans Sizes">
-                    </div>
-                    <div class="modal-footer border-warning d-flex justify-content-between">
-                        <a id="deleteProductBtn" href="#" class="btn btn-danger click-sound" onclick="return confirm('Are you sure you want to delete this product?')"><i class="fa-solid fa-trash"></i> Delete</a>
-                        <button type="submit" class="btn btn-gold click-sound"><i class="fa-solid fa-save"></i> Save Changes</button>
-                    </div>
-                </form>
-            </div>
+        <div>
+          <label>Price (&#8377;) *</label>
+          <input name="price" type="number" step="1" min="0" required value="{{ edit_product.price if edit_product else '' }}">
         </div>
-    </div>
-
-    <!-- ADD CATEGORY MODAL -->
-    <div class="modal fade text-dark" id="addCategoryModal">
-        <div class="modal-dialog">
-            <div class="modal-content bg-dark text-light border-warning">
-                <form action="/add_category" method="POST">
-                    <div class="modal-header border-warning"><h5 class="text-gold">Add Category</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-                    <div class="modal-body">
-                        <input type="text" name="name" class="form-control mb-2" placeholder="Category Name" required>
-                        <input type="text" name="img" class="form-control mb-2" placeholder="Image URL" required>
-                    </div>
-                    <div class="modal-footer border-warning"><button type="submit" class="btn btn-gold click-sound w-100">Add Category</button></div>
-                </form>
-            </div>
+        <div>
+          <label>MRP (&#8377;)</label>
+          <input name="mrp" type="number" step="1" min="0" value="{{ edit_product.mrp if edit_product else '' }}">
         </div>
-    </div>
-
-    <!-- ADD BANNER MODAL -->
-    <div class="modal fade text-dark" id="addBannerModal">
-        <div class="modal-dialog">
-            <div class="modal-content bg-dark text-light border-warning">
-                <form action="/add_banner" method="POST">
-                    <div class="modal-header border-warning"><h5 class="text-gold">Add Banner</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-                    <div class="modal-body">
-                        <input type="text" name="img" class="form-control mb-2" placeholder="Banner Image URL" required>
-                        <input type="text" name="target_link" class="form-control mb-2" placeholder="Target Link (e.g., # or https://...)" required>
-                    </div>
-                    <div class="modal-footer border-warning"><button type="submit" class="btn btn-gold click-sound w-100">Add Banner</button></div>
-                </form>
-            </div>
+        <div>
+          <label>Shirt Sizes (comma)</label>
+          <input name="shirtSizes" placeholder="S,M,L,XL" value="{{ edit_product.shirtSizes if edit_product else '' }}">
         </div>
-    </div>
+        <div>
+          <label>Jeans Sizes (comma)</label>
+          <input name="jeansSizes" placeholder="28,30,32,34" value="{{ edit_product.jeansSizes if edit_product else '' }}">
+        </div>
+      </div>
+      <label>Image URL</label>
+      <input name="img" placeholder="https://..." value="{{ edit_product.img if edit_product else '' }}">
+      <button class="btn" type="submit">{{ 'Update Product' if edit_product else 'Add Product' }}</button>
+      {% if edit_product %}
+        <a class="btn ghost" href="{{ url_for('index', tab='products') }}">Cancel</a>
+      {% endif %}
+    </form>
+  </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Tik-Tik Sound Script
-        const tik = document.getElementById('tikSound');
-        document.querySelectorAll('.click-sound').forEach(item => {
-            item.addEventListener('click', () => {
-                tik.currentTime = 0;
-                tik.play();
-            });
-        });
+  <div class="card">
+    <h2>All Products ({{ products|length }})</h2>
+    {% if not products %}<div class="empty">Koi product nahi hai.</div>{% endif %}
+    {% for p in products %}
+      <div class="row">
+        <img src="{{ p.img or placeholder }}" alt="{{ p.name or 'product' }}" loading="lazy">
+        <div class="meta">
+          <b>{{ p.name }} &nbsp;<span class="pill">{{ p.category or 'no category' }}</span></b>
+          <small>
+            &#8377;{{ p._price }}{% if p._mrp %} &middot; MRP &#8377;{{ p._mrp }}{% endif %}{% if p.discount %} &middot; {{ p.discount }} OFF{% endif %}<br>
+            {% if p.shirtSizes %}Shirt: {{ p.shirtSizes }}{% endif %}
+            {% if p.jeansSizes %} &middot; Jeans: {{ p.jeansSizes }}{% endif %}
+          </small>
+        </div>
+        <a class="btn sm ghost" href="{{ url_for('index', tab='products', edit=p.key) }}">Edit</a>
+        <form method="post" action="{{ url_for('delete_item') }}" onsubmit="return confirm('Product delete karna hai?')">
+          <input type="hidden" name="node" value="products">
+          <input type="hidden" name="key" value="{{ p.key }}">
+          <input type="hidden" name="tab" value="products">
+          <button class="btn sm del" type="submit">Delete</button>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
 
-        // Edit Product Modal Population
-        function editProduct(id, name, price, mrp, discount, category, img, shirtSizes, jeansSizes) {
-            document.getElementById('edit_id').value = id;
-            document.getElementById('edit_name').value = name;
-            document.getElementById('edit_price').value = price;
-            document.getElementById('edit_mrp').value = mrp;
-            document.getElementById('edit_discount').value = discount;
-            document.getElementById('edit_category').value = category;
-            document.getElementById('edit_img').value = img;
-            document.getElementById('edit_shirtSizes').value = shirtSizes !== 'None' ? shirtSizes : '';
-            document.getElementById('edit_jeansSizes').value = jeansSizes !== 'None' ? jeansSizes : '';
-            document.getElementById('deleteProductBtn').href = "/delete_product?id=" + id;
-            
-            var editModal = new bootstrap.Modal(document.getElementById('editProductModal'));
-            editModal.show();
-        }
-    </script>
+  <!-- CATEGORIES -->
+  {% if tab == 'categories' %}
+  <div class="card">
+    <h2>Add Category</h2>
+    <form method="post" action="{{ url_for('add_category') }}">
+      <div class="grid2">
+        <div>
+          <label>Category Name *</label>
+          <input name="name" required placeholder="Shirts">
+        </div>
+        <div>
+          <label>Image URL</label>
+          <input name="img" placeholder="https://...">
+        </div>
+      </div>
+      <button class="btn" type="submit">Add Category</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>All Categories ({{ categories|length }})</h2>
+    {% if not categories %}<div class="empty">Koi category nahi hai.</div>{% endif %}
+    {% for c in categories %}
+      <div class="row">
+        <img src="{{ c.img or placeholder }}" alt="{{ c.name or 'category' }}" loading="lazy">
+        <div class="meta"><b>{{ c.name }}</b><small>{{ c.img or 'no image' }}</small></div>
+        <form method="post" action="{{ url_for('delete_item') }}" onsubmit="return confirm('Category delete karni hai?')">
+          <input type="hidden" name="node" value="categories">
+          <input type="hidden" name="key" value="{{ c.key }}">
+          <input type="hidden" name="tab" value="categories">
+          <button class="btn sm del" type="submit">Delete</button>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- BANNERS -->
+  {% if tab == 'banners' %}
+  <div class="card">
+    <h2>Add Banner(s)</h2>
+    <form method="post" action="{{ url_for('add_banner') }}">
+      <label>Image URL(s) &mdash; har line pe ek URL (multiple banners ek saath)</label>
+      <textarea name="img" required placeholder="https://image-1.jpg&#10;https://image-2.jpg"></textarea>
+      <label>Target Link (optional, sab par same lagega)</label>
+      <input name="target_link" placeholder="https://... ya category name">
+      <button class="btn" type="submit">Add Banner(s)</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>All Banners ({{ banners|length }})</h2>
+    {% if not banners %}<div class="empty">Koi banner nahi hai.</div>{% endif %}
+    {% for b in banners %}
+      <div class="row">
+        <img src="{{ b.img or placeholder }}" alt="banner" loading="lazy">
+        <div class="meta"><b>Banner</b><small>{{ b.img }}<br>{{ b.target_link or 'no link' }}</small></div>
+        <form method="post" action="{{ url_for('delete_item') }}" onsubmit="return confirm('Banner delete karna hai?')">
+          <input type="hidden" name="node" value="banners">
+          <input type="hidden" name="key" value="{{ b.key }}">
+          <input type="hidden" name="tab" value="banners">
+          <button class="btn sm del" type="submit">Delete</button>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- SETTINGS -->
+  {% if tab == 'settings' %}
+  <div class="card">
+    <h2>Payment Settings</h2>
+    <form method="post" action="{{ url_for('save_settings') }}">
+      <label>UPI ID</label>
+      <input name="upi_id" value="{{ settings.upi_id or '' }}" placeholder="name@upi">
+      <label>QR Image URL</label>
+      <input name="qr_url" value="{{ settings.qr_url or '' }}" placeholder="https://...">
+      <label>WhatsApp Number (91 ke saath)</label>
+      <input name="whatsapp" value="{{ settings.whatsapp or '' }}" placeholder="919999999999">
+      <button class="btn" type="submit">Save Settings</button>
+    </form>
+    {% if settings.qr_url %}
+      <div class="row"><img src="{{ settings.qr_url }}" alt="QR"><div class="meta"><b>Current QR</b><small>{{ settings.upi_id or '-' }}</small></div></div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+</div>
+<footer>MZ Fashion Admin &middot; no login &middot; {{ now }}</footer>
 </body>
 </html>
 """
 
-# ==========================================
+TABS = [
+    ("orders", "Orders"),
+    ("products", "Products"),
+    ("categories", "Categories"),
+    ("banners", "Banners"),
+    ("settings", "Settings"),
+]
+
+PLACEHOLDER = "https://placehold.co/120x120/eee/999?text=No+Image"
+
+
+# ----------------------------------------------------------------------------
 # ROUTES
-# ==========================================
+# ----------------------------------------------------------------------------
+@app.route("/")
+def index():
+    tab = request.args.get("tab", "orders")
+    if tab not in dict(TABS):
+        tab = "orders"
 
-@app.route('/')
-def dashboard():
-    if not session.get('logged_in'):
-        return '''
-        <body style="background:#121212; color:#d4af37; font-family:sans-serif; text-align:center; padding-top:100px;">
-            <h2>MZ FASHION ADMIN</h2>
-            <form action="/login" method="POST" style="margin-top:30px;">
-                <input type="text" name="user" placeholder="Username" style="padding:10px; margin-bottom:10px;"><br>
-                <input type="password" name="pass" placeholder="Password" style="padding:10px; margin-bottom:10px;"><br>
-                <button type="submit" style="padding:10px 30px; background:#d4af37; color:#000; font-weight:bold; border:none; cursor:pointer;">LOGIN</button>
-            </form>
-        </body>
-        '''
-    
-    # Fetch Data from Firebase
-    orders = db.reference('orders').get() or {}
-    products = db.reference('products').get() or {}
-    categories = db.reference('categories').get() or {}
-    banners = db.reference('banners').get() or {}
-    settings = db.reference('settings/payment').get() or {}
-    
-    # Sort orders newest first
-    orders = dict(sorted(orders.items(), key=lambda item: item[0], reverse=True))
+    orders = as_list("orders", sort_desc=True)
+    products = as_list("products")
+    categories = as_list("categories")
+    banners = as_list("banners")
 
-    return render_template_string(ADMIN_HTML, orders=orders, products=products, categories=categories, banners=banners, settings=settings)
+    try:
+        settings = ref("settings/payment").get() or {}
+    except Exception:
+        settings = {}
+    if not isinstance(settings, dict):
+        settings = {}
 
-@app.route('/login', methods=['POST'])
-def login():
-    if request.form['user'] == ADMIN_USER and request.form['pass'] == ADMIN_PASS:
-        session['logged_in'] = True
-    return redirect('/')
+    for o in orders:
+        o["_price"] = money(o.get("price"))
+    for p in products:
+        p["_price"] = money(p.get("price"))
+        p["_mrp"] = money(p.get("mrp")) if num(p.get("mrp")) else ""
 
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect('/')
+    revenue = money(sum(num(o.get("price")) for o in orders))
 
-# --- ACTIONS ---
+    edit_key = request.args.get("edit")
+    edit_product = None
+    if edit_key:
+        for p in products:
+            if p["key"] == edit_key:
+                edit_product = p
+                break
 
-@app.route('/update_settings', methods=['POST'])
-def update_settings():
-    db.reference('settings/payment').set({
-        'qr_url': request.form['qr_url'],
-        'upi_id': request.form['upi_id'],
-        'whatsapp': request.form['whatsapp']
-    })
-    flash("Settings updated successfully!")
-    return redirect('/')
+    return render_template_string(
+        TEMPLATE,
+        tab=tab,
+        tabs=TABS,
+        orders=orders,
+        products=products,
+        categories=categories,
+        banners=banners,
+        settings=settings,
+        revenue=revenue,
+        edit_product=edit_product,
+        placeholder=PLACEHOLDER,
+        db_url=DB_URL,
+        fb_error=FIREBASE_ERROR,
+        now=datetime.now().strftime("%d %b %Y, %I:%M %p"),
+    )
 
-@app.route('/add_product', methods=['POST'])
-def add_product():
-    new_ref = db.reference('products').push()
-    new_ref.set({
-        'id': new_ref.key,
-        'name': request.form['name'],
-        'price': int(request.form['price']),
-        'mrp': int(request.form['mrp']),
-        'discount': request.form['discount'],
-        'category': request.form['category'],
-        'img': request.form['img'],
-        'shirtSizes': request.form['shirtSizes'],
-        'jeansSizes': request.form['jeansSizes']
-    })
-    flash("Product added successfully!")
-    return redirect('/')
 
-@app.route('/edit_product', methods=['POST'])
-def edit_product():
-    prod_id = request.form['id']
-    db.reference(f'products/{prod_id}').update({
-        'name': request.form['name'],
-        'price': int(request.form['price']),
-        'mrp': int(request.form['mrp']),
-        'discount': request.form['discount'],
-        'category': request.form['category'],
-        'img': request.form['img'],
-        'shirtSizes': request.form['shirtSizes'],
-        'jeansSizes': request.form['jeansSizes']
-    })
-    flash("Product updated successfully!")
-    return redirect('/')
+@app.route("/product/save", methods=["POST"])
+def save_product():
+    f = request.form
+    name = (f.get("name") or "").strip()
+    if not name:
+        flash("Product ka naam zaroori hai.", "error")
+        return redirect(url_for("index", tab="products"))
 
-@app.route('/delete_product')
-def delete_product():
-    db.reference(f"products/{request.args.get('id')}").delete()
-    flash("Product deleted!")
-    return redirect('/')
+    price = num(f.get("price"))
+    mrp = num(f.get("mrp"))
+    discount = ""
+    if mrp > price > 0:
+        discount = "%d%%" % round((mrp - price) * 100.0 / mrp)
 
-@app.route('/add_category', methods=['POST'])
+    data = {
+        "name": name,
+        "price": price,
+        "mrp": mrp,
+        "discount": discount,
+        "category": (f.get("category") or "").strip(),
+        "img": (f.get("img") or "").strip(),
+        "shirtSizes": (f.get("shirtSizes") or "").strip(),
+        "jeansSizes": (f.get("jeansSizes") or "").strip(),
+    }
+
+    key = (f.get("key") or "").strip()
+    try:
+        if key:
+            ref("products/%s" % key).update(data)
+            flash("Product update ho gaya.", "ok")
+        else:
+            new_ref = ref("products").push(data)
+            new_ref.update({"id": new_ref.key})
+            flash("Product add ho gaya.", "ok")
+    except Exception as e:
+        flash("Save fail: %s" % e, "error")
+
+    return redirect(url_for("index", tab="products"))
+
+
+@app.route("/category/add", methods=["POST"])
 def add_category():
-    new_ref = db.reference('categories').push()
-    new_ref.set({'id': new_ref.key, 'name': request.form['name'], 'img': request.form['img']})
-    flash("Category added!")
-    return redirect('/')
+    name = (request.form.get("name") or "").strip()
+    img = (request.form.get("img") or "").strip()
+    if not name:
+        flash("Category ka naam zaroori hai.", "error")
+        return redirect(url_for("index", tab="categories"))
+    try:
+        new_ref = ref("categories").push({"name": name, "img": img})
+        new_ref.update({"id": new_ref.key})
+        flash("Category add ho gayi.", "ok")
+    except Exception as e:
+        flash("Category add fail: %s" % e, "error")
+    return redirect(url_for("index", tab="categories"))
 
-@app.route('/delete_category', methods=['POST'])
-def delete_category():
-    db.reference(f"categories/{request.form['id']}").delete()
-    flash("Category deleted!")
-    return redirect('/')
 
-@app.route('/add_banner', methods=['POST'])
+@app.route("/banner/add", methods=["POST"])
 def add_banner():
-    new_ref = db.reference('banners').push()
-    new_ref.set({'id': new_ref.key, 'img': request.form['img'], 'target_link': request.form['target_link']})
-    flash("Banner added!")
-    return redirect('/')
+    raw = request.form.get("img") or ""
+    target = (request.form.get("target_link") or "").strip()
 
-@app.route('/delete_banner', methods=['POST'])
-def delete_banner():
-    db.reference(f"banners/{request.form['id']}").delete()
-    flash("Banner deleted!")
-    return redirect('/')
+    urls = []
+    for chunk in raw.replace(",", "\n").splitlines():
+        u = chunk.strip()
+        if u:
+            urls.append(u)
 
-@app.route('/delete_order', methods=['POST'])
-def delete_order():
-    db.reference(f"orders/{request.form['id']}").delete()
-    flash("Order deleted!")
-    return redirect('/')
+    if not urls:
+        flash("Kam se kam ek image URL daalein.", "error")
+        return redirect(url_for("index", tab="banners"))
 
-if __name__ == '__main__':
-    app.run(debug=True)
+    added = 0
+    try:
+        for u in urls:
+            new_ref = ref("banners").push({"img": u, "target_link": target})
+            new_ref.update({"id": new_ref.key})
+            added += 1
+        flash("%d banner add ho gaye." % added, "ok")
+    except Exception as e:
+        flash("Banner add fail (%d added): %s" % (added, e), "error")
+    return redirect(url_for("index", tab="banners"))
+
+
+@app.route("/settings/save", methods=["POST"])
+def save_settings():
+    data = {
+        "upi_id": (request.form.get("upi_id") or "").strip(),
+        "qr_url": (request.form.get("qr_url") or "").strip(),
+        "whatsapp": (request.form.get("whatsapp") or "").strip(),
+    }
+    try:
+        ref("settings/payment").set(data)
+        flash("Settings save ho gayi.", "ok")
+    except Exception as e:
+        flash("Settings save fail: %s" % e, "error")
+    return redirect(url_for("index", tab="settings"))
+
+
+@app.route("/delete", methods=["POST"])
+def delete_item():
+    node = request.form.get("node")
+    key = (request.form.get("key") or "").strip()
+    tab = request.form.get("tab") or "orders"
+    if node not in ("orders", "products", "categories", "banners") or not key:
+        flash("Galat delete request.", "error")
+        return redirect(url_for("index", tab=tab))
+    try:
+        ref("%s/%s" % (node, key)).delete()
+        flash("Delete ho gaya.", "ok")
+    except Exception as e:
+        flash("Delete fail: %s" % e, "error")
+    return redirect(url_for("index", tab=tab))
+
+
+@app.route("/health")
+def health():
+    try:
+        ref("/").get()
+        return {"firebase": "ok", "db": DB_URL}
+    except Exception as e:
+        return {"firebase": "error", "detail": str(e)}, 500
+
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)
