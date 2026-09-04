@@ -18,7 +18,7 @@ from flask import Flask, render_template_string, request, redirect, url_for, fla
 # ----------------------------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Service account JSON ka path. Home folder me rakha hai to:
+# Service account JSON ka path
 CRED_PATH = os.environ.get(
     "FIREBASE_CRED_PATH",
     os.path.join(os.path.expanduser("~"), "serviceAccountKey.json"),
@@ -33,7 +33,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "mz-fashion-admin-secret-change-me")
 
 # ----------------------------------------------------------------------------
-# FIREBASE INIT (safe, sirf ek baar)
+# FIREBASE INIT
 # ----------------------------------------------------------------------------
 FIREBASE_ERROR = None
 
@@ -69,7 +69,7 @@ def as_list(node_path, sort_desc=False):
     except Exception as e:
         print("READ ERROR", node_path, e)
         return []
-    if isinstance(data, list):  # RTDB kabhi list de deta hai
+    if isinstance(data, list):
         data = {str(i): v for i, v in enumerate(data) if v}
     items = []
     for k, v in data.items():
@@ -147,7 +147,7 @@ TEMPLATE = """
   .empty{color:var(--ink-soft);font-size:13px;padding:14px 0}
   .pill{display:inline-block;background:#f3ece1;color:var(--ink-soft);border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700}
   footer{text-align:center;color:var(--ink-soft);font-size:11px;padding:22px}
-  @media(max-width:480px){ .btn-col{flex-direction:row;width:100%;margin-top:10px;} .btn-col .btn{flex:1} }
+  @media(max-width:480px){ .row{flex-wrap:wrap} .btn-col{flex-direction:row;width:100%} .btn-col .btn{flex:1} }
 </style>
 </head>
 <body>
@@ -196,41 +196,41 @@ TEMPLATE = """
             <span class="pill" style="font-size:13px; color:var(--ink);">&#8377;{{ o._price }}</span>
           </div>
 
-          <!-- Multi-item Display logic -->
-          {% if o.items %}
+          <!-- Multi-item Display logic (FIXED) -->
+          {% if o.get('items') %}
             <div style="margin-bottom:12px; background:#fffdf9; padding:10px; border-radius:8px; border:1px solid var(--line);">
-              {% for item in o.items %}
+              {% for item in o.get('items') %}
                 <div style="display:flex; gap:10px; margin-bottom:{% if loop.last %}0{% else %}8px{% endif %}; align-items:center;">
-                  <img src="{{ item.img or placeholder }}" style="width:45px; height:45px; border-radius:6px; object-fit:cover; flex:0 0 auto; border:1px solid var(--line);">
+                  <img src="{{ item.get('img') or placeholder }}" style="width:45px; height:45px; border-radius:6px; object-fit:cover; flex:0 0 auto; border:1px solid var(--line);">
                   <div style="line-height:1.4;">
-                    <b style="font-size:13px;">{{ item.name }}</b><br>
-                    <small style="color:var(--ink-soft); font-size:11px;">Size: {{ item.size }} {% if item.price %}&middot; &#8377;{{ item.price }}{% endif %}</small>
+                    <b style="font-size:13px;">{{ item.get('name') }}</b><br>
+                    <small style="color:var(--ink-soft); font-size:11px;">Size: {{ item.get('size') }} {% if item.get('price') %}&middot; &#8377;{{ item.get('price') }}{% endif %}</small>
                   </div>
                 </div>
               {% endfor %}
             </div>
           {% else %}
-             <!-- Purane orders fallback (Jo pehle place hue the) -->
+             <!-- Purane orders fallback -->
              <div style="display:flex; gap:10px; margin-bottom:12px; background:#fffdf9; padding:10px; border-radius:8px; border:1px solid var(--line); align-items:center;">
-                <img src="{{ o.img or placeholder }}" style="width:45px; height:45px; border-radius:6px; object-fit:cover; flex:0 0 auto; border:1px solid var(--line);">
+                <img src="{{ o.get('img') or placeholder }}" style="width:45px; height:45px; border-radius:6px; object-fit:cover; flex:0 0 auto; border:1px solid var(--line);">
                 <div style="line-height:1.4;">
-                  <b style="font-size:13px;">{{ o.product_name or 'Product' }}</b>
+                  <b style="font-size:13px;">{{ o.get('product_name') or 'Product' }}</b>
                 </div>
               </div>
           {% endif %}
 
           <div style="font-size:12px; color:var(--ink-soft); line-height:1.6;">
-            <b>Customer:</b> <span style="color:var(--ink);">{{ o.name or '-' }} ({{ o.phone or '-' }})</span><br>
-            <b>Address:</b> <span style="color:var(--ink);">{{ o.address or '-' }}</span><br>
-            <b>Payment:</b> <span style="color:var(--ink);">{{ o.payment or '-' }} &middot; {{ o.date or '-' }}</span><br>
-            <b>Status:</b> <strong style="color: {% if o.status == 'Confirmed' %}var(--ok){% elif o.status == 'Rejected' %}var(--danger){% else %}#d97706{% endif %}">
-              {{ o.status or 'Pending Verification' }}
+            <b>Customer:</b> <span style="color:var(--ink);">{{ o.get('name', '-') }} ({{ o.get('phone', '-') }})</span><br>
+            <b>Address:</b> <span style="color:var(--ink);">{{ o.get('address', '-') }}</span><br>
+            <b>Payment:</b> <span style="color:var(--ink);">{{ o.get('payment', '-') }} &middot; {{ o.get('date', '-') }}</span><br>
+            <b>Status:</b> <strong style="color: {% if o.get('status') == 'Confirmed' %}var(--ok){% elif o.get('status') == 'Rejected' %}var(--danger){% else %}#d97706{% endif %}">
+              {{ o.get('status', 'Pending Verification') }}
             </strong>
           </div>
         </div>
         
         <div class="btn-col">
-          {% if o.status != 'Confirmed' %}
+          {% if o.get('status') != 'Confirmed' %}
           <form method="post" action="{{ url_for('update_order_status') }}" style="margin:0;">
             <input type="hidden" name="key" value="{{ o.key }}">
             <input type="hidden" name="status" value="Confirmed">
@@ -238,7 +238,7 @@ TEMPLATE = """
           </form>
           {% endif %}
           
-          {% if o.status != 'Rejected' %}
+          {% if o.get('status') != 'Rejected' %}
           <form method="post" action="{{ url_for('update_order_status') }}" style="margin:0;" onsubmit="return confirm('Order reject karna hai?')">
             <input type="hidden" name="key" value="{{ o.key }}">
             <input type="hidden" name="status" value="Rejected">
@@ -309,13 +309,13 @@ TEMPLATE = """
     {% if not products %}<div class="empty">Koi product nahi hai.</div>{% endif %}
     {% for p in products %}
       <div class="row">
-        <img src="{{ p.img or placeholder }}" alt="{{ p.name or 'product' }}" style="width:60px; height:60px; border-radius:10px; object-fit:cover; flex:0 0 auto;">
+        <img src="{{ p.get('img') or placeholder }}" alt="{{ p.get('name') or 'product' }}" style="width:60px; height:60px; border-radius:10px; object-fit:cover; flex:0 0 auto;">
         <div style="flex:1; min-width:0;">
-          <b style="display:block; font-size:14px;">{{ p.name }} &nbsp;<span class="pill">{{ p.category or 'no category' }}</span></b>
+          <b style="display:block; font-size:14px;">{{ p.get('name') }} &nbsp;<span class="pill">{{ p.get('category') or 'no category' }}</span></b>
           <small style="display:block; color:var(--ink-soft); font-size:12px; line-height:1.5;">
-            &#8377;{{ p._price }}{% if p._mrp %} &middot; MRP &#8377;{{ p._mrp }}{% endif %}{% if p.discount %} &middot; {{ p.discount }} OFF{% endif %}<br>
-            {% if p.shirtSizes %}Shirt: {{ p.shirtSizes }}{% endif %}
-            {% if p.jeansSizes %} &middot; Jeans: {{ p.jeansSizes }}{% endif %}
+            &#8377;{{ p._price }}{% if p._mrp %} &middot; MRP &#8377;{{ p._mrp }}{% endif %}{% if p.get('discount') %} &middot; {{ p.get('discount') }} OFF{% endif %}<br>
+            {% if p.get('shirtSizes') %}Shirt: {{ p.get('shirtSizes') }}{% endif %}
+            {% if p.get('jeansSizes') %} &middot; Jeans: {{ p.get('jeansSizes') }}{% endif %}
           </small>
         </div>
         <a class="btn sm ghost" href="{{ url_for('index', tab='products', edit=p.key) }}">Edit</a>
@@ -354,8 +354,8 @@ TEMPLATE = """
     {% if not categories %}<div class="empty">Koi category nahi hai.</div>{% endif %}
     {% for c in categories %}
       <div class="row">
-        <img src="{{ c.img or placeholder }}" alt="{{ c.name or 'category' }}" style="width:60px; height:60px; border-radius:10px; object-fit:cover; flex:0 0 auto;">
-        <div style="flex:1; min-width:0;"><b style="display:block; font-size:14px;">{{ c.name }}</b><small style="display:block; color:var(--ink-soft); font-size:12px; line-height:1.5; word-break:break-all;">{{ c.img or 'no image' }}</small></div>
+        <img src="{{ c.get('img') or placeholder }}" alt="{{ c.get('name') or 'category' }}" style="width:60px; height:60px; border-radius:10px; object-fit:cover; flex:0 0 auto;">
+        <div style="flex:1; min-width:0;"><b style="display:block; font-size:14px;">{{ c.get('name') }}</b><small style="display:block; color:var(--ink-soft); font-size:12px; line-height:1.5; word-break:break-all;">{{ c.get('img') or 'no image' }}</small></div>
         <form method="post" action="{{ url_for('delete_item') }}" onsubmit="return confirm('Category delete karni hai?')">
           <input type="hidden" name="node" value="categories">
           <input type="hidden" name="key" value="{{ c.key }}">
@@ -385,8 +385,8 @@ TEMPLATE = """
     {% if not banners %}<div class="empty">Koi banner nahi hai.</div>{% endif %}
     {% for b in banners %}
       <div class="row">
-        <img src="{{ b.img or placeholder }}" alt="banner" style="width:60px; height:60px; border-radius:10px; object-fit:cover; flex:0 0 auto;">
-        <div style="flex:1; min-width:0;"><b style="display:block; font-size:14px;">Banner</b><small style="display:block; color:var(--ink-soft); font-size:12px; line-height:1.5; word-break:break-all;">{{ b.img }}<br>{{ b.target_link or 'no link' }}</small></div>
+        <img src="{{ b.get('img') or placeholder }}" alt="banner" style="width:60px; height:60px; border-radius:10px; object-fit:cover; flex:0 0 auto;">
+        <div style="flex:1; min-width:0;"><b style="display:block; font-size:14px;">Banner</b><small style="display:block; color:var(--ink-soft); font-size:12px; line-height:1.5; word-break:break-all;">{{ b.get('img') }}<br>{{ b.get('target_link') or 'no link' }}</small></div>
         <form method="post" action="{{ url_for('delete_item') }}" onsubmit="return confirm('Banner delete karna hai?')">
           <input type="hidden" name="node" value="banners">
           <input type="hidden" name="key" value="{{ b.key }}">
@@ -404,17 +404,17 @@ TEMPLATE = """
     <h2>Payment Settings</h2>
     <form method="post" action="{{ url_for('save_settings') }}">
       <label>UPI ID</label>
-      <input name="upi_id" value="{{ settings.upi_id or '' }}" placeholder="name@upi">
+      <input name="upi_id" value="{{ settings.get('upi_id', '') }}" placeholder="name@upi">
       <label>QR Image URL</label>
-      <input name="qr_url" value="{{ settings.qr_url or '' }}" placeholder="https://...">
+      <input name="qr_url" value="{{ settings.get('qr_url', '') }}" placeholder="https://...">
       <label>WhatsApp Number (91 ke saath)</label>
-      <input name="whatsapp" value="{{ settings.whatsapp or '' }}" placeholder="919999999999">
+      <input name="whatsapp" value="{{ settings.get('whatsapp', '') }}" placeholder="919999999999">
       <button class="btn" type="submit">Save Settings</button>
     </form>
-    {% if settings.qr_url %}
+    {% if settings.get('qr_url') %}
       <div class="row">
-         <img src="{{ settings.qr_url }}" alt="QR" style="width:60px; height:60px; border-radius:10px; object-fit:cover; flex:0 0 auto;">
-         <div style="flex:1; min-width:0;"><b style="display:block; font-size:14px;">Current QR</b><small style="display:block; color:var(--ink-soft); font-size:12px; line-height:1.5;">{{ settings.upi_id or '-' }}</small></div>
+         <img src="{{ settings.get('qr_url') }}" alt="QR" style="width:60px; height:60px; border-radius:10px; object-fit:cover; flex:0 0 auto;">
+         <div style="flex:1; min-width:0;"><b style="display:block; font-size:14px;">Current QR</b><small style="display:block; color:var(--ink-soft); font-size:12px; line-height:1.5;">{{ settings.get('upi_id', '-') }}</small></div>
       </div>
     {% endif %}
   </div>
@@ -463,14 +463,13 @@ def index():
         # --- FIX FOR FIREBASE ARRAY/DICT CONVERSION ISSUE ---
         items_val = o.get("items")
         if isinstance(items_val, dict):
-            # Agar Firebase ne list ko dict me convert kar diya hai toh wapas list banaye
             parsed_items = []
             for k, v in items_val.items():
                 if isinstance(v, dict):
                     parsed_items.append(v)
             o["items"] = parsed_items
         elif not isinstance(items_val, list):
-            o["items"] = None # ensures it's falsy if it's junk data
+            o["items"] = None
 
     for p in products:
         p["_price"] = money(p.get("price"))
