@@ -142,7 +142,10 @@ TEMPLATE = """
     background:linear-gradient(135deg,var(--gold),var(--gold-2));color:#fff;font-weight:700;font-size:14px;text-decoration:none}
   .btn.sm{padding:7px 12px;font-size:12px;margin:0}
   .btn.del{background:#fdeceb;color:var(--danger)}
+  .btn.accept{background:var(--ok);color:#fff}
+  .btn.reject{background:var(--danger);color:#fff}
   .btn.ghost{background:#f3ece1;color:var(--ink)}
+  .btn-col{display:flex;flex-direction:column;gap:6px;flex:0 0 auto;min-width:90px;}
   .row{display:flex;gap:12px;align-items:center;border-top:1px solid var(--line);padding:12px 0}
   .row:first-of-type{border-top:0}
   .row img{width:60px;height:60px;object-fit:cover;border-radius:10px;background:#eee;flex:0 0 auto}
@@ -155,7 +158,7 @@ TEMPLATE = """
   .empty{color:var(--ink-soft);font-size:13px;padding:14px 0}
   .pill{display:inline-block;background:#f3ece1;color:var(--ink-soft);border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700}
   footer{text-align:center;color:var(--ink-soft);font-size:11px;padding:22px}
-  @media(max-width:480px){ .row{flex-wrap:wrap} }
+  @media(max-width:480px){ .row{flex-wrap:wrap} .btn-col{flex-direction:row;width:100%} .btn-col .btn{flex:1} }
 </style>
 </head>
 <body>
@@ -203,15 +206,37 @@ TEMPLATE = """
           <small>
             {{ o.name or '-' }} &middot; {{ o.phone or '-' }}<br>
             {{ o.address or '-' }}<br>
-            Payment: {{ o.payment or '-' }} &middot; {{ o.date or '-' }}
+            Payment: {{ o.payment or '-' }} &middot; {{ o.date or '-' }}<br>
+            Status: <strong style="color: {% if o.status == 'Confirmed' %}var(--ok){% elif o.status == 'Rejected' %}var(--danger){% else %}#d97706{% endif %}">
+              {{ o.status or 'Pending Verification' }}
+            </strong>
           </small>
         </div>
-        <form method="post" action="{{ url_for('delete_item') }}" onsubmit="return confirm('Order delete karna hai?')">
-          <input type="hidden" name="node" value="orders">
-          <input type="hidden" name="key" value="{{ o.key }}">
-          <input type="hidden" name="tab" value="orders">
-          <button class="btn sm del" type="submit">Delete</button>
-        </form>
+        
+        <div class="btn-col">
+          {% if o.status != 'Confirmed' %}
+          <form method="post" action="{{ url_for('update_order_status') }}" style="margin:0;">
+            <input type="hidden" name="key" value="{{ o.key }}">
+            <input type="hidden" name="status" value="Confirmed">
+            <button class="btn sm accept" type="submit" style="width:100%">Accept</button>
+          </form>
+          {% endif %}
+          
+          {% if o.status != 'Rejected' %}
+          <form method="post" action="{{ url_for('update_order_status') }}" style="margin:0;" onsubmit="return confirm('Order reject karna hai?')">
+            <input type="hidden" name="key" value="{{ o.key }}">
+            <input type="hidden" name="status" value="Rejected">
+            <button class="btn sm reject" type="submit" style="width:100%">Reject</button>
+          </form>
+          {% endif %}
+
+          <form method="post" action="{{ url_for('delete_item') }}" style="margin:0;" onsubmit="return confirm('Order permanently delete karna hai?')">
+            <input type="hidden" name="node" value="orders">
+            <input type="hidden" name="key" value="{{ o.key }}">
+            <input type="hidden" name="tab" value="orders">
+            <button class="btn sm del" type="submit" style="width:100%">Delete</button>
+          </form>
+        </div>
       </div>
     {% endfor %}
   </div>
@@ -544,6 +569,21 @@ def save_settings():
     except Exception as e:
         flash("Settings save fail: %s" % e, "error")
     return redirect(url_for("index", tab="settings"))
+
+# --- NAYA ROUTE: ORDER STATUS UPDATE KARNE KE LIYE ---
+@app.route("/order/status", methods=["POST"])
+def update_order_status():
+    key = request.form.get("key")
+    status = request.form.get("status")
+    if not key or not status:
+        flash("Galat request aayi hai.", "error")
+        return redirect(url_for("index", tab="orders"))
+    try:
+        ref("orders/%s" % key).update({"status": status})
+        flash(f"Order status '{status}' kar diya gaya hai.", "ok")
+    except Exception as e:
+        flash("Status update fail: %s" % e, "error")
+    return redirect(url_for("index", tab="orders"))
 
 
 @app.route("/delete", methods=["POST"])
