@@ -37,7 +37,6 @@ app.secret_key = os.environ.get("SECRET_KEY", "mz-fashion-admin-secret-change-me
 # ----------------------------------------------------------------------------
 FIREBASE_ERROR = None
 
-
 def init_firebase():
     global FIREBASE_ERROR
     try:
@@ -55,16 +54,13 @@ def init_firebase():
         traceback.print_exc()
         return False
 
-
 init_firebase()
-
 
 def ref(path):
     if not firebase_admin._apps:
         if not init_firebase():
             raise RuntimeError(FIREBASE_ERROR or "Firebase init failed")
     return db.reference(path)
-
 
 def as_list(node_path, sort_desc=False):
     """RTDB dict ko list of dicts (key ke saath) me badalta hai."""
@@ -85,20 +81,17 @@ def as_list(node_path, sort_desc=False):
     items.sort(key=lambda r: str(r.get("key", "")), reverse=sort_desc)
     return items
 
-
 def num(value, default=0):
     try:
         return float(str(value).replace(",", "").strip())
     except Exception:
         return default
 
-
 def money(value):
     n = num(value)
     if n == int(n):
         return str(int(n))
     return "%.2f" % n
-
 
 # ----------------------------------------------------------------------------
 # TEMPLATE
@@ -148,17 +141,13 @@ TEMPLATE = """
   .btn-col{display:flex;flex-direction:column;gap:6px;flex:0 0 auto;min-width:90px;}
   .row{display:flex;gap:12px;align-items:center;border-top:1px solid var(--line);padding:12px 0}
   .row:first-of-type{border-top:0}
-  .row img{width:60px;height:60px;object-fit:cover;border-radius:10px;background:#eee;flex:0 0 auto}
-  .row .meta{flex:1;min-width:0}
-  .row .meta b{display:block;font-size:14px}
-  .row .meta small{display:block;color:var(--ink-soft);font-size:12px;line-height:1.5;word-break:break-word}
   .flash{padding:10px 14px;border-radius:10px;margin-bottom:10px;font-size:13px;font-weight:600}
   .flash.ok{background:#e6f4ec;color:var(--ok)}
   .flash.err{background:#fdeceb;color:var(--danger)}
   .empty{color:var(--ink-soft);font-size:13px;padding:14px 0}
   .pill{display:inline-block;background:#f3ece1;color:var(--ink-soft);border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700}
   footer{text-align:center;color:var(--ink-soft);font-size:11px;padding:22px}
-  @media(max-width:480px){ .row{flex-wrap:wrap} .btn-col{flex-direction:row;width:100%} .btn-col .btn{flex:1} }
+  @media(max-width:480px){ .btn-col{flex-direction:row;width:100%;margin-top:10px;} .btn-col .btn{flex:1} }
 </style>
 </head>
 <body>
@@ -199,18 +188,45 @@ TEMPLATE = """
     <h2>Orders ({{ orders|length }})</h2>
     {% if not orders %}<div class="empty">Koi order nahi hai.</div>{% endif %}
     {% for o in orders %}
-      <div class="row">
-        <img src="{{ o.img or placeholder }}" alt="{{ o.product_name or 'product' }}" loading="lazy">
-        <div class="meta">
-          <b>{{ o.product_name or 'Product' }} &nbsp;<span class="pill">&#8377;{{ o._price }}</span></b>
-          <small>
-            {{ o.name or '-' }} &middot; {{ o.phone or '-' }}<br>
-            {{ o.address or '-' }}<br>
-            Payment: {{ o.payment or '-' }} &middot; {{ o.date or '-' }}<br>
-            Status: <strong style="color: {% if o.status == 'Confirmed' %}var(--ok){% elif o.status == 'Rejected' %}var(--danger){% else %}#d97706{% endif %}">
+      <div class="row" style="align-items: flex-start; flex-wrap:wrap;">
+        <div style="flex:1; min-width:250px;">
+          
+          <div style="display:flex; justify-content:space-between; margin-bottom:8px; align-items:center;">
+            <b>Order <span style="font-size:12px; color:var(--ink-soft); font-weight:normal;">#{{ o.id or o.key }}</span></b>
+            <span class="pill" style="font-size:13px; color:var(--ink);">&#8377;{{ o._price }}</span>
+          </div>
+
+          <!-- Multi-item Display logic -->
+          {% if o.items %}
+            <div style="margin-bottom:12px; background:#fffdf9; padding:10px; border-radius:8px; border:1px solid var(--line);">
+              {% for item in o.items %}
+                <div style="display:flex; gap:10px; margin-bottom:{% if loop.last %}0{% else %}8px{% endif %}; align-items:center;">
+                  <img src="{{ item.img or placeholder }}" style="width:45px; height:45px; border-radius:6px; object-fit:cover; flex:0 0 auto; border:1px solid var(--line);">
+                  <div style="line-height:1.4;">
+                    <b style="font-size:13px;">{{ item.name }}</b><br>
+                    <small style="color:var(--ink-soft); font-size:11px;">Size: {{ item.size }} {% if item.price %}&middot; &#8377;{{ item.price }}{% endif %}</small>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+             <!-- Purane orders fallback -->
+             <div style="display:flex; gap:10px; margin-bottom:12px; background:#fffdf9; padding:10px; border-radius:8px; border:1px solid var(--line); align-items:center;">
+                <img src="{{ o.img or placeholder }}" style="width:45px; height:45px; border-radius:6px; object-fit:cover; flex:0 0 auto; border:1px solid var(--line);">
+                <div style="line-height:1.4;">
+                  <b style="font-size:13px;">{{ o.product_name or 'Product' }}</b>
+                </div>
+              </div>
+          {% endif %}
+
+          <div style="font-size:12px; color:var(--ink-soft); line-height:1.6;">
+            <b>Customer:</b> <span style="color:var(--ink);">{{ o.name or '-' }} ({{ o.phone or '-' }})</span><br>
+            <b>Address:</b> <span style="color:var(--ink);">{{ o.address or '-' }}</span><br>
+            <b>Payment:</b> <span style="color:var(--ink);">{{ o.payment or '-' }} &middot; {{ o.date or '-' }}</span><br>
+            <b>Status:</b> <strong style="color: {% if o.status == 'Confirmed' %}var(--ok){% elif o.status == 'Rejected' %}var(--danger){% else %}#d97706{% endif %}">
               {{ o.status or 'Pending Verification' }}
             </strong>
-          </small>
+          </div>
         </div>
         
         <div class="btn-col">
@@ -293,10 +309,10 @@ TEMPLATE = """
     {% if not products %}<div class="empty">Koi product nahi hai.</div>{% endif %}
     {% for p in products %}
       <div class="row">
-        <img src="{{ p.img or placeholder }}" alt="{{ p.name or 'product' }}" loading="lazy">
-        <div class="meta">
-          <b>{{ p.name }} &nbsp;<span class="pill">{{ p.category or 'no category' }}</span></b>
-          <small>
+        <img src="{{ p.img or placeholder }}" alt="{{ p.name or 'product' }}" style="width:60px; height:60px; border-radius:10px; object-fit:cover; flex:0 0 auto;">
+        <div style="flex:1; min-width:0;">
+          <b style="display:block; font-size:14px;">{{ p.name }} &nbsp;<span class="pill">{{ p.category or 'no category' }}</span></b>
+          <small style="display:block; color:var(--ink-soft); font-size:12px; line-height:1.5;">
             &#8377;{{ p._price }}{% if p._mrp %} &middot; MRP &#8377;{{ p._mrp }}{% endif %}{% if p.discount %} &middot; {{ p.discount }} OFF{% endif %}<br>
             {% if p.shirtSizes %}Shirt: {{ p.shirtSizes }}{% endif %}
             {% if p.jeansSizes %} &middot; Jeans: {{ p.jeansSizes }}{% endif %}
@@ -338,8 +354,8 @@ TEMPLATE = """
     {% if not categories %}<div class="empty">Koi category nahi hai.</div>{% endif %}
     {% for c in categories %}
       <div class="row">
-        <img src="{{ c.img or placeholder }}" alt="{{ c.name or 'category' }}" loading="lazy">
-        <div class="meta"><b>{{ c.name }}</b><small>{{ c.img or 'no image' }}</small></div>
+        <img src="{{ c.img or placeholder }}" alt="{{ c.name or 'category' }}" style="width:60px; height:60px; border-radius:10px; object-fit:cover; flex:0 0 auto;">
+        <div style="flex:1; min-width:0;"><b style="display:block; font-size:14px;">{{ c.name }}</b><small style="display:block; color:var(--ink-soft); font-size:12px; line-height:1.5; word-break:break-all;">{{ c.img or 'no image' }}</small></div>
         <form method="post" action="{{ url_for('delete_item') }}" onsubmit="return confirm('Category delete karni hai?')">
           <input type="hidden" name="node" value="categories">
           <input type="hidden" name="key" value="{{ c.key }}">
@@ -369,8 +385,8 @@ TEMPLATE = """
     {% if not banners %}<div class="empty">Koi banner nahi hai.</div>{% endif %}
     {% for b in banners %}
       <div class="row">
-        <img src="{{ b.img or placeholder }}" alt="banner" loading="lazy">
-        <div class="meta"><b>Banner</b><small>{{ b.img }}<br>{{ b.target_link or 'no link' }}</small></div>
+        <img src="{{ b.img or placeholder }}" alt="banner" style="width:60px; height:60px; border-radius:10px; object-fit:cover; flex:0 0 auto;">
+        <div style="flex:1; min-width:0;"><b style="display:block; font-size:14px;">Banner</b><small style="display:block; color:var(--ink-soft); font-size:12px; line-height:1.5; word-break:break-all;">{{ b.img }}<br>{{ b.target_link or 'no link' }}</small></div>
         <form method="post" action="{{ url_for('delete_item') }}" onsubmit="return confirm('Banner delete karna hai?')">
           <input type="hidden" name="node" value="banners">
           <input type="hidden" name="key" value="{{ b.key }}">
@@ -396,7 +412,10 @@ TEMPLATE = """
       <button class="btn" type="submit">Save Settings</button>
     </form>
     {% if settings.qr_url %}
-      <div class="row"><img src="{{ settings.qr_url }}" alt="QR"><div class="meta"><b>Current QR</b><small>{{ settings.upi_id or '-' }}</small></div></div>
+      <div class="row">
+         <img src="{{ settings.qr_url }}" alt="QR" style="width:60px; height:60px; border-radius:10px; object-fit:cover; flex:0 0 auto;">
+         <div style="flex:1; min-width:0;"><b style="display:block; font-size:14px;">Current QR</b><small style="display:block; color:var(--ink-soft); font-size:12px; line-height:1.5;">{{ settings.upi_id or '-' }}</small></div>
+      </div>
     {% endif %}
   </div>
   {% endif %}
@@ -416,7 +435,6 @@ TABS = [
 ]
 
 PLACEHOLDER = "https://placehold.co/120x120/eee/999?text=No+Image"
-
 
 # ----------------------------------------------------------------------------
 # ROUTES
@@ -472,7 +490,6 @@ def index():
         now=datetime.now().strftime("%d %b %Y, %I:%M %p"),
     )
 
-
 @app.route("/product/save", methods=["POST"])
 def save_product():
     f = request.form
@@ -512,7 +529,6 @@ def save_product():
 
     return redirect(url_for("index", tab="products"))
 
-
 @app.route("/category/add", methods=["POST"])
 def add_category():
     name = (request.form.get("name") or "").strip()
@@ -527,7 +543,6 @@ def add_category():
     except Exception as e:
         flash("Category add fail: %s" % e, "error")
     return redirect(url_for("index", tab="categories"))
-
 
 @app.route("/banner/add", methods=["POST"])
 def add_banner():
@@ -554,7 +569,6 @@ def add_banner():
     except Exception as e:
         flash("Banner add fail (%d added): %s" % (added, e), "error")
     return redirect(url_for("index", tab="banners"))
-
 
 @app.route("/settings/save", methods=["POST"])
 def save_settings():
@@ -585,7 +599,6 @@ def update_order_status():
         flash("Status update fail: %s" % e, "error")
     return redirect(url_for("index", tab="orders"))
 
-
 @app.route("/delete", methods=["POST"])
 def delete_item():
     node = request.form.get("node")
@@ -601,7 +614,6 @@ def delete_item():
         flash("Delete fail: %s" % e, "error")
     return redirect(url_for("index", tab=tab))
 
-
 @app.route("/health")
 def health():
     try:
@@ -609,7 +621,6 @@ def health():
         return {"firebase": "ok", "db": DB_URL}
     except Exception as e:
         return {"firebase": "error", "detail": str(e)}, 500
-
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
