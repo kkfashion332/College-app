@@ -238,7 +238,7 @@ TEMPLATE = """
                   <img src="{{ item.get('img') or placeholder }}" style="width:50px; height:50px; border-radius:8px; object-fit:cover; border:1px solid var(--line);">
                   <div style="line-height:1.4;">
                     <b style="font-size:13px; color:var(--ink);">{{ item.get('name') }}</b><br>
-                    <small style="color:var(--primary); font-weight:700; font-size:11px;">Size: {{ item.get('size') }} {% if item.get('price') %}&middot; &#8377;{{ item.get('price') }}{% endif %}</small>
+                    <small style="color:var(--primary); font-weight:700; font-size:11px;">Size: {{ item.get('size') }} {% if item.get('color') %}&middot; Color: {{ item.get('color') }}{% endif %} {% if item.get('price') %}&middot; &#8377;{{ item.get('price') }}{% endif %}</small>
                   </div>
                 </div>
               {% endfor %}
@@ -399,6 +399,14 @@ TEMPLATE = """
           <label>Jeans Sizes (comma separated)</label>
           <input name="jeansSizes" placeholder="28, 30, 32, 34" value="{{ edit_product.jeansSizes if edit_product else '' }}">
         </div>
+        <div>
+          <label>Color Names (comma separated)</label>
+          <input name="colorNames" placeholder="Grey, Black, Red" value="{{ edit_product.colorNames if edit_product else '' }}">
+        </div>
+        <div>
+          <label>Color Image URLs (comma separated)</label>
+          <input name="colorImages" placeholder="https://..., https://..." value="{{ edit_product.colorImages if edit_product else '' }}">
+        </div>
       </div>
       <label>Image URL</label>
       <input name="img" placeholder="https://..." value="{{ edit_product.img if edit_product else '' }}">
@@ -423,6 +431,7 @@ TEMPLATE = """
             <span style="color:var(--ink); font-weight:700;">&#8377;{{ p._price }}</span>{% if p._mrp %} <span style="text-decoration:line-through; color:#9ca3af;">&#8377;{{ p._mrp }}</span>{% endif %}{% if p.get('discount') %} &middot; <span style="color:var(--primary); font-weight:700;">{{ p.get('discount') }}</span>{% endif %}<br>
             {% if p.get('shirtSizes') %}Top: {{ p.get('shirtSizes') }}{% endif %}
             {% if p.get('jeansSizes') %} &middot; Bottom: {{ p.get('jeansSizes') }}{% endif %}
+            {% if p.get('colorNames') %}<br><span style="color:var(--ink-soft);">Colors: {{ p.get('colorNames') }}</span>{% endif %}
           </small>
         </div>
         <a class="btn sm ghost" href="{{ url_for('index', tab='products', edit=p.key) }}"><i class="fa-solid fa-pen"></i></a>
@@ -646,6 +655,8 @@ def save_product():
         "img": (f.get("img") or "").strip(),
         "shirtSizes": (f.get("shirtSizes") or "").strip(),
         "jeansSizes": (f.get("jeansSizes") or "").strip(),
+        "colorNames": (f.get("colorNames") or "").strip(),
+        "colorImages": (f.get("colorImages") or "").strip(),
     }
 
     key = (f.get("key") or "").strip()
