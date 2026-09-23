@@ -237,7 +237,11 @@ TEMPLATE = """
                 <div style="display:flex; gap:12px; margin-bottom:{% if loop.last %}0{% else %}10px{% endif %}; align-items:center;">
                   <img src="{{ item.get('img') or placeholder }}" style="width:50px; height:50px; border-radius:8px; object-fit:cover; border:1px solid var(--line);">
                   <div style="line-height:1.4;">
-                    <b style="font-size:13px; color:var(--ink);">{{ item.get('name') }}</b><br>
+                    <b style="font-size:13px; color:var(--ink);">{{ item.get('name') }}</b>
+                    {% if item.get('isFlipkart') == 'true' or item.get('isFlipkart') == True %}
+                        <span class="pill" style="background:#0284c7; color:#fff; font-size:9px; margin-left:5px;">Flipkart Product</span>
+                    {% endif %}
+                    <br>
                     <small style="color:var(--primary); font-weight:700; font-size:11px;">Size: {{ item.get('size') }} {% if item.get('color') %}&middot; Color: {{ item.get('color') }}{% endif %} {% if item.get('price') %}&middot; &#8377;{{ item.get('price') }}{% endif %}</small>
                   </div>
                 </div>
@@ -265,9 +269,11 @@ TEMPLATE = """
         
         <div class="btn-col">
           {% if o.get('status') != 'Confirmed' %}
-          <form method="post" action="{{ url_for('update_order_status') }}" style="margin:0;">
+          <form method="post" action="{{ url_for('update_order_status') }}" style="margin:0;" onsubmit="promptTracking(event, this);">
             <input type="hidden" name="key" value="{{ o.key }}">
             <input type="hidden" name="status" value="Confirmed">
+            <input type="hidden" name="tracking_id" class="tid" value="">
+            <input type="hidden" name="tracking_link" class="tlink" value="">
             <button class="btn sm accept" type="submit" style="width:100%"><i class="fa-solid fa-check"></i> Accept</button>
           </form>
           {% endif %}
@@ -290,6 +296,20 @@ TEMPLATE = """
       </div>
     {% endfor %}
   </div>
+
+  <script>
+    function promptTracking(event, form) {
+        event.preventDefault();
+        let tid = prompt("Order accept kar rahe hain. \\nTracking ID daliye (agar available hai toh):");
+        let tlink = "";
+        if (tid && tid.trim() !== "") {
+            tlink = prompt("Tracking Link daliye:");
+        }
+        form.querySelector('.tid').value = tid || "";
+        form.querySelector('.tlink').value = tlink || "";
+        form.submit();
+    }
+  </script>
   {% endif %}
 
   <!-- USERS & MESSAGES TAB -->
@@ -341,7 +361,6 @@ TEMPLATE = """
     }
 
     function copyAllNumbers() {
-        // Collect all phone numbers (last 10 digits) and separate by comma
         let numbers = [
             {% for u in users %}
                 '{{ u.get("phone", "") }}',
@@ -404,13 +423,21 @@ TEMPLATE = """
           <input name="colorNames" placeholder="Grey, Black, Red" value="{{ edit_product.colorNames if edit_product else '' }}">
         </div>
         <div>
+          <label>Color Specific Sizes (use | to separate)</label>
+          <input name="colorSizes" placeholder="S,M|L,XL|Free Size" value="{{ edit_product.colorSizes if edit_product else '' }}">
+        </div>
+        <div style="grid-column: 1 / -1;">
           <label>Color Image URLs (comma separated)</label>
           <input name="colorImages" placeholder="https://..., https://..." value="{{ edit_product.colorImages if edit_product else '' }}">
         </div>
+        <div style="grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; margin-top: 5px;">
+          <input type="checkbox" name="isFlipkart" value="true" id="isFlipkart" style="width: auto;" {{ 'checked' if edit_product and edit_product.isFlipkart == 'true' else '' }}>
+          <label for="isFlipkart" style="margin:0; font-size:14px; text-transform:none;">Mark as Flipkart Product (Uses secondary QR for payment)</label>
+        </div>
       </div>
-      <label>Image URL</label>
+      <label style="margin-top: 15px;">Image URL (Main Cover)</label>
       <input name="img" placeholder="https://..." value="{{ edit_product.img if edit_product else '' }}">
-      <div style="display:flex; gap:10px;">
+      <div style="display:flex; gap:10px; margin-top: 15px;">
           <button class="btn" type="submit">{{ 'Update Product' if edit_product else 'Save New Product' }}</button>
           {% if edit_product %}
             <a class="btn ghost" href="{{ url_for('index', tab='products') }}">Cancel</a>
@@ -426,7 +453,7 @@ TEMPLATE = """
       <div class="row">
         <img src="{{ p.get('img') or placeholder }}" alt="{{ p.get('name') or 'product' }}" style="width:60px; height:60px; border-radius:10px; object-fit:cover; flex:0 0 auto; border:1px solid var(--line);">
         <div style="flex:1; min-width:0;">
-          <b style="display:block; font-size:14px;">{{ p.get('name') }} &nbsp;<span class="pill">{{ p.get('category') or 'Uncategorized' }}</span></b>
+          <b style="display:block; font-size:14px;">{{ p.get('name') }} &nbsp;<span class="pill">{{ p.get('category') or 'Uncategorized' }}</span>{% if p.get('isFlipkart') == 'true' %}<span class="pill" style="background:#0284c7; color:#fff; margin-left:5px;">Flipkart</span>{% endif %}</b>
           <small style="display:block; color:var(--ink-soft); font-size:12px; line-height:1.5; margin-top:2px;">
             <span style="color:var(--ink); font-weight:700;">&#8377;{{ p._price }}</span>{% if p._mrp %} <span style="text-decoration:line-through; color:#9ca3af;">&#8377;{{ p._mrp }}</span>{% endif %}{% if p.get('discount') %} &middot; <span style="color:var(--primary); font-weight:700;">{{ p.get('discount') }}</span>{% endif %}<br>
             {% if p.get('shirtSizes') %}Top: {{ p.get('shirtSizes') }}{% endif %}
@@ -521,28 +548,53 @@ TEMPLATE = """
   <!-- SETTINGS -->
   {% if tab == 'settings' %}
   <div class="card">
-    <h2><i class="fa-solid fa-gear"></i> App Settings</h2>
+    <h2><i class="fa-solid fa-gear"></i> Main Store Settings</h2>
     <form method="post" action="{{ url_for('save_settings') }}">
-      <label>UPI ID (For Payments)</label>
+      <label>Main Store UPI ID</label>
       <input name="upi_id" value="{{ settings.get('upi_id', '') }}" placeholder="name@upi">
       
-      <label>QR Image URL (Payment QR Code)</label>
+      <label>Main QR Image URL</label>
       <input name="qr_url" value="{{ settings.get('qr_url', '') }}" placeholder="https://...">
       
-      <label>WhatsApp Support Number (Country code '91' lagakar)</label>
-      <input name="whatsapp" value="{{ settings.get('whatsapp', '') }}" placeholder="919999999999">
-      
-      <button class="btn" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
-    </form>
-    {% if settings.get('qr_url') %}
-      <div class="row" style="margin-top: 20px;">
-         <img src="{{ settings.get('qr_url') }}" alt="QR" style="width:80px; height:80px; border-radius:10px; object-fit:cover; flex:0 0 auto; border:2px solid var(--primary-light);">
-         <div style="flex:1; min-width:0;">
-            <b style="display:block; font-size:14px; color:var(--primary);">Active QR Code</b>
-            <small style="display:block; color:var(--ink-soft); font-size:13px; font-weight:700;">{{ settings.get('upi_id', 'No UPI set') }}</small>
-         </div>
+      <div style="margin: 20px 0; border-top: 1px dashed var(--line); padding-top: 20px;">
+        <h2><i class="fa-solid fa-store"></i> Flipkart Products Payment</h2>
+        
+        <label>Flipkart UPI ID</label>
+        <input name="flipkart_upi_id" value="{{ settings.get('flipkart_upi_id', '') }}" placeholder="flipkart_name@upi">
+        
+        <label>Flipkart QR Image URL</label>
+        <input name="flipkart_qr_url" value="{{ settings.get('flipkart_qr_url', '') }}" placeholder="https://...">
       </div>
-    {% endif %}
+
+      <div style="margin: 20px 0; border-top: 1px dashed var(--line); padding-top: 20px;">
+        <label>WhatsApp Support Number (Country code '91' lagakar)</label>
+        <input name="whatsapp" value="{{ settings.get('whatsapp', '') }}" placeholder="919999999999">
+      </div>
+      
+      <button class="btn" type="submit"><i class="fa-solid fa-floppy-disk"></i> Save All Settings</button>
+    </form>
+    
+    <div style="display:flex; gap:20px; margin-top:20px; flex-wrap:wrap;">
+        {% if settings.get('qr_url') %}
+        <div class="row" style="flex:1; border:none;">
+            <img src="{{ settings.get('qr_url') }}" alt="QR" style="width:80px; height:80px; border-radius:10px; object-fit:cover; flex:0 0 auto; border:2px solid var(--primary-light);">
+            <div style="flex:1; min-width:0;">
+                <b style="display:block; font-size:14px; color:var(--primary);">Main QR Code</b>
+                <small style="display:block; color:var(--ink-soft); font-size:13px; font-weight:700;">{{ settings.get('upi_id', 'No UPI set') }}</small>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if settings.get('flipkart_qr_url') %}
+        <div class="row" style="flex:1; border:none;">
+            <img src="{{ settings.get('flipkart_qr_url') }}" alt="Flipkart QR" style="width:80px; height:80px; border-radius:10px; object-fit:cover; flex:0 0 auto; border:2px solid #0284c7;">
+            <div style="flex:1; min-width:0;">
+                <b style="display:block; font-size:14px; color:#0284c7;">Flipkart QR Code</b>
+                <small style="display:block; color:var(--ink-soft); font-size:13px; font-weight:700;">{{ settings.get('flipkart_upi_id', 'No UPI set') }}</small>
+            </div>
+        </div>
+        {% endif %}
+    </div>
   </div>
   {% endif %}
 
@@ -577,7 +629,7 @@ def index():
     products = as_list("products")
     categories = as_list("categories")
     banners = as_list("banners")
-    users = as_list("users", sort_desc=True) # Fetched real-time users data
+    users = as_list("users", sort_desc=True) 
 
     try:
         settings = ref("settings/payment").get() or {}
@@ -589,7 +641,6 @@ def index():
     for o in orders:
         o["_price"] = money(o.get("price"))
         
-        # --- FIX FOR FIREBASE ARRAY/DICT CONVERSION ISSUE ---
         items_val = o.get("items")
         if isinstance(items_val, dict):
             parsed_items = []
@@ -656,7 +707,9 @@ def save_product():
         "shirtSizes": (f.get("shirtSizes") or "").strip(),
         "jeansSizes": (f.get("jeansSizes") or "").strip(),
         "colorNames": (f.get("colorNames") or "").strip(),
+        "colorSizes": (f.get("colorSizes") or "").strip(),
         "colorImages": (f.get("colorImages") or "").strip(),
+        "isFlipkart": "true" if f.get("isFlipkart") else "false",
     }
 
     key = (f.get("key") or "").strip()
@@ -719,6 +772,8 @@ def save_settings():
     data = {
         "upi_id": (request.form.get("upi_id") or "").strip(),
         "qr_url": (request.form.get("qr_url") or "").strip(),
+        "flipkart_upi_id": (request.form.get("flipkart_upi_id") or "").strip(),
+        "flipkart_qr_url": (request.form.get("flipkart_qr_url") or "").strip(),
         "whatsapp": (request.form.get("whatsapp") or "").strip(),
     }
     try:
@@ -733,11 +788,20 @@ def save_settings():
 def update_order_status():
     key = request.form.get("key")
     status = request.form.get("status")
+    tracking_id = (request.form.get("tracking_id") or "").strip()
+    tracking_link = (request.form.get("tracking_link") or "").strip()
+    
     if not key or not status:
         flash("Invalid request.", "error")
         return redirect(url_for("index", tab="orders"))
+        
+    update_data = {"status": status}
+    if status == "Confirmed":
+        update_data["tracking_id"] = tracking_id
+        update_data["tracking_link"] = tracking_link
+        
     try:
-        ref("orders/%s" % key).update({"status": status})
+        ref("orders/%s" % key).update(update_data)
         flash(f"Order status updated to '{status}'.", "ok")
     except Exception as e:
         flash("Status update failed: %s" % e, "error")
