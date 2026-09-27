@@ -196,7 +196,6 @@ TEMPLATE = """
             <span class="pill" style="font-size:13px; color:var(--ink);">&#8377;{{ o._price }}</span>
           </div>
 
-          <!-- Multi-item Display logic (FIXED) -->
           {% if o.get('items') %}
             <div style="margin-bottom:12px; background:#fffdf9; padding:10px; border-radius:8px; border:1px solid var(--line);">
               {% for item in o.get('items') %}
@@ -214,7 +213,6 @@ TEMPLATE = """
               {% endfor %}
             </div>
           {% else %}
-             <!-- Purane orders fallback -->
              <div style="display:flex; gap:10px; margin-bottom:12px; background:#fffdf9; padding:10px; border-radius:8px; border:1px solid var(--line); align-items:center;">
                 <img src="{{ o.get('img') or placeholder }}" style="width:45px; height:45px; border-radius:6px; object-fit:cover; flex:0 0 auto; border:1px solid var(--line);">
                 <div style="line-height:1.4;">
@@ -319,8 +317,12 @@ TEMPLATE = """
           <input name="colorNames" placeholder="Grey, Black, Red" value="{{ edit_product.colorNames if edit_product else '' }}">
         </div>
         <div>
-          <label>Color Specific Sizes (use | to separate)</label>
+          <label>Color Specific Shirt Sizes (use | to separate)</label>
           <input name="colorSizes" placeholder="S,M|L,XL|Free Size" value="{{ edit_product.colorSizes if edit_product else '' }}">
+        </div>
+        <div>
+          <label>Color Specific Jeans Sizes (use | to separate)</label>
+          <input name="colorJeansSizes" placeholder="28,30|32,34|Free Size" value="{{ edit_product.colorJeansSizes if edit_product else '' }}">
         </div>
         <div style="grid-column: 1 / -1;">
           <label>Color Image URLs (comma separated)</label>
@@ -527,7 +529,6 @@ def index():
     for o in orders:
         o["_price"] = money(o.get("price"))
         
-        # --- FIX FOR FIREBASE ARRAY/DICT CONVERSION ISSUE ---
         items_val = o.get("items")
         if isinstance(items_val, dict):
             parsed_items = []
@@ -594,6 +595,7 @@ def save_product():
         "jeansSizes": (f.get("jeansSizes") or "").strip(),
         "colorNames": (f.get("colorNames") or "").strip(),
         "colorSizes": (f.get("colorSizes") or "").strip(),
+        "colorJeansSizes": (f.get("colorJeansSizes") or "").strip(), # New field mapping added
         "colorImages": (f.get("colorImages") or "").strip(),
         "isFlipkart": "true" if f.get("isFlipkart") else "false",
     }
@@ -669,7 +671,6 @@ def save_settings():
         flash("Settings save fail: %s" % e, "error")
     return redirect(url_for("index", tab="settings"))
 
-# --- ROUTE: ORDER STATUS UPDATE KARNE KE LIYE ---
 @app.route("/order/status", methods=["POST"])
 def update_order_status():
     key = request.form.get("key")
