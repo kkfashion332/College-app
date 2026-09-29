@@ -297,11 +297,11 @@ TEMPLATE = """
           </select>
         </div>
         <div>
-          <label>Price (&#8377;) *</label>
+          <label>Base Price (&#8377;) *</label>
           <input name="price" type="number" step="1" min="0" required value="{{ edit_product.price if edit_product else '' }}">
         </div>
         <div>
-          <label>MRP (&#8377;)</label>
+          <label>Base MRP (&#8377;)</label>
           <input name="mrp" type="number" step="1" min="0" value="{{ edit_product.mrp if edit_product else '' }}">
         </div>
         <div>
@@ -328,6 +328,16 @@ TEMPLATE = """
           <label>Color Image URLs (comma separated)</label>
           <input name="colorImages" placeholder="https://..., https://..." value="{{ edit_product.colorImages if edit_product else '' }}">
         </div>
+        <!-- NEW PRICE/MRP FIELDS -->
+        <div>
+          <label>Color Specific Prices (comma separated)</label>
+          <input name="colorPrices" placeholder="499, 599, 699" value="{{ edit_product.colorPrices if edit_product else '' }}">
+        </div>
+        <div>
+          <label>Color Specific MRPs (comma separated)</label>
+          <input name="colorMRPs" placeholder="999, 1099, 1199" value="{{ edit_product.colorMRPs if edit_product else '' }}">
+        </div>
+        <!-- END NEW PRICE/MRP FIELDS -->
         <div style="grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; margin-top: 5px;">
           <input type="checkbox" name="isFlipkart" value="true" id="isFlipkart" style="width: auto;" {{ 'checked' if edit_product and edit_product.isFlipkart == 'true' else '' }}>
           <label for="isFlipkart" style="margin:0; font-size:14px; text-transform:none;">Mark as Flipkart Product (Uses secondary QR for payment)</label>
@@ -595,8 +605,10 @@ def save_product():
         "jeansSizes": (f.get("jeansSizes") or "").strip(),
         "colorNames": (f.get("colorNames") or "").strip(),
         "colorSizes": (f.get("colorSizes") or "").strip(),
-        "colorJeansSizes": (f.get("colorJeansSizes") or "").strip(), # New field mapping added
+        "colorJeansSizes": (f.get("colorJeansSizes") or "").strip(),
         "colorImages": (f.get("colorImages") or "").strip(),
+        "colorPrices": (f.get("colorPrices") or "").strip(), # NEW: Save Color Prices
+        "colorMRPs": (f.get("colorMRPs") or "").strip(),     # NEW: Save Color MRPs
         "isFlipkart": "true" if f.get("isFlipkart") else "false",
     }
 
