@@ -112,10 +112,10 @@ TEMPLATE = """
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 <style>
   :root {
-    --primary: #16a34a; /* Green */
+    --primary: #16a34a; 
     --primary-dark: #15803d;
     --primary-light: #dcfce7;
-    --bg: #f9fafb; /* Light Gray/White Background */
+    --bg: #f9fafb; 
     --card: #ffffff;
     --line: #e5e7eb;
     --ink: #111827;
@@ -172,10 +172,9 @@ TEMPLATE = """
   .empty { color: var(--ink-soft); font-size: 14px; padding: 20px 0; text-align: center; font-weight: 600; background: var(--bg); border-radius: 10px; border: 1px dashed var(--line); }
   .pill { display: inline-block; background: var(--primary-light); color: var(--primary-dark); border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
   
-  /* User Search Input Custom Style */
   .search-box { position: relative; margin-bottom: 15px; }
   .search-box i { position: absolute; left: 14px; top: 14px; color: var(--ink-soft); }
-  .search-box input { pl-10; padding-left: 40px; border-radius: 999px; }
+  .search-box input { padding-left: 40px; border-radius: 999px; }
 
   footer { text-align: center; color: var(--ink-soft); font-size: 12px; font-weight: 600; padding: 24px; border-top: 1px solid var(--line); margin-top: 20px; }
   
@@ -364,9 +363,10 @@ TEMPLATE = """
     }
 
     function copyAllNumbers() {
+        // Fix for JavaScript array rendering syntax inside Jinja template
         let numbers = [
             {% for u in users %}
-                '{{ u.get("phone", "") }}',
+                "{{ u.get('phone', '') }}",
             {% endfor %}
         ];
         
