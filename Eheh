@@ -343,8 +343,8 @@ TEMPLATE = """
           <label for="isFlipkart" style="margin:0; font-size:14px; text-transform:none;">Mark as Flipkart Product (Uses secondary QR for payment)</label>
         </div>
       </div>
-      <label style="margin-top: 15px;">Image URL (Main Cover)</label>
-      <input name="img" placeholder="https://..." value="{{ edit_product.img if edit_product else '' }}">
+      <label style="margin-top: 15px;">Image URL(s) (Main Cover - Comma separated for slider)</label>
+      <input name="img" placeholder="https://image1.jpg, https://image2.jpg" value="{{ edit_product.img if edit_product else '' }}">
       <div style="display:flex; gap:10px; margin-top: 15px;">
           <button class="btn" type="submit">{{ 'Update Product' if edit_product else 'Add Product' }}</button>
           {% if edit_product %}
@@ -607,8 +607,8 @@ def save_product():
         "colorSizes": (f.get("colorSizes") or "").strip(),
         "colorJeansSizes": (f.get("colorJeansSizes") or "").strip(),
         "colorImages": (f.get("colorImages") or "").strip(),
-        "colorPrices": (f.get("colorPrices") or "").strip(), # NEW: Save Color Prices
-        "colorMRPs": (f.get("colorMRPs") or "").strip(),     # NEW: Save Color MRPs
+        "colorPrices": (f.get("colorPrices") or "").strip(), 
+        "colorMRPs": (f.get("colorMRPs") or "").strip(),     
         "isFlipkart": "true" if f.get("isFlipkart") else "false",
     }
 
