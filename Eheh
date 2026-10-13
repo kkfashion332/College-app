@@ -15,7 +15,6 @@ from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, db
 from flask import Flask, render_template_string, request, redirect, url_for, flash, jsonify
-from flask_cors import CORS
 
 # ----------------------------------------------------------------------------
 # CONFIG
@@ -34,7 +33,14 @@ DB_URL = os.environ.get(
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "mz-fashion-admin-secret-change-me")
-CORS(app)
+
+# CORS Fix for PythonAnywhere (Bina kisi extra module ke)
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 # ----------------------------------------------------------------------------
 # FIREBASE INIT
@@ -583,8 +589,11 @@ def index():
 # ----------------------------------------------------------------------------
 # SECURE ORDER PLACEMENT API (SERVER VALIDATION FOR TAMPER PREVENTION)
 # ----------------------------------------------------------------------------
-@app.route("/place-order", methods=["POST"])
+@app.route("/place-order", methods=["POST", "OPTIONS"])
 def place_order():
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200
+        
     try:
         data = request.get_json(force=True)
         if not data:
@@ -821,31 +830,6 @@ def health():
         return {"firebase": "ok", "db": DB_URL}
     except Exception as e:
         return {"firebase": "error", "detail": str(e)}, 500
-
-@app.route("/api/telegram_alert")
-def telegram_alert():
-    order_id = request.args.get("id", "Unknown")
-    name = request.args.get("name", "Unknown")
-    price = request.args.get("price", "0")
-    
-    BOT_TOKEN = "YAHAN_APNA_BOT_TOKEN_DAAL"
-    CHAT_ID = "YAHAN_APNA_CHAT_ID_DAAL"
-    
-    if BOT_TOKEN == "YAHAN_APNA_BOT_TOKEN_DAAL":
-        return {"status": "token not set"}
-
-    text = f"🛍️ *NEW ORDER ARRIVED!*\n\n*Order ID:* {order_id}\n*Customer:* {name}\n*Amount:* ₹{price}\n\nJaldi se Admin Panel check kar bhai!"
-    
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = json.dumps({"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"}).encode('utf-8')
-    headers = {'Content-Type': 'application/json'}
-    
-    try:
-        req = urllib.request.Request(url, data=payload, headers=headers)
-        urllib.request.urlopen(req)
-        return {"status": "sent"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
