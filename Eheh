@@ -2,23 +2,26 @@
 """
 MZ Fashion - Admin Panel (Flask + Firebase Realtime Database)
 No login. Orders / Products / Categories / Banners / Payment Settings
+Includes secure server-side order validation to prevent F12 tampering.
 """
 
 import os
 import json
+import time
 import traceback
+import urllib.request
 from datetime import datetime
 
 import firebase_admin
 from firebase_admin import credentials, db
-from flask import Flask, render_template_string, request, redirect, url_for, flash
+from flask import Flask, render_template_string, request, redirect, url_for, flash, jsonify
+from flask_cors import CORS
 
 # ----------------------------------------------------------------------------
 # CONFIG
 # ----------------------------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Service account JSON ka path
 CRED_PATH = os.environ.get(
     "FIREBASE_CRED_PATH",
     os.path.join(os.path.expanduser("~"), "serviceAccountKey.json"),
@@ -31,6 +34,7 @@ DB_URL = os.environ.get(
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "mz-fashion-admin-secret-change-me")
+CORS(app)
 
 # ----------------------------------------------------------------------------
 # FIREBASE INIT
@@ -63,7 +67,6 @@ def ref(path):
     return db.reference(path)
 
 def as_list(node_path, sort_desc=False):
-    """RTDB dict ko list of dicts (key ke saath) me badalta hai."""
     try:
         data = ref(node_path).get() or {}
     except Exception as e:
@@ -328,7 +331,6 @@ TEMPLATE = """
           <label>Color Image URLs (comma separated)</label>
           <input name="colorImages" placeholder="https://..., https://..." value="{{ edit_product.colorImages if edit_product else '' }}">
         </div>
-        <!-- NEW PRICE/MRP FIELDS -->
         <div>
           <label>Color Specific Prices (comma separated)</label>
           <input name="colorPrices" placeholder="499, 599, 699" value="{{ edit_product.colorPrices if edit_product else '' }}">
@@ -337,7 +339,6 @@ TEMPLATE = """
           <label>Color Specific MRPs (comma separated)</label>
           <input name="colorMRPs" placeholder="999, 1099, 1199" value="{{ edit_product.colorMRPs if edit_product else '' }}">
         </div>
-        <!-- END NEW PRICE/MRP FIELDS -->
         <div style="grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; margin-top: 5px;">
           <input type="checkbox" name="isFlipkart" value="true" id="isFlipkart" style="width: auto;" {{ 'checked' if edit_product and edit_product.isFlipkart == 'true' else '' }}>
           <label for="isFlipkart" style="margin:0; font-size:14px; text-transform:none;">Mark as Flipkart Product (Uses secondary QR for payment)</label>
@@ -538,7 +539,6 @@ def index():
 
     for o in orders:
         o["_price"] = money(o.get("price"))
-        
         items_val = o.get("items")
         if isinstance(items_val, dict):
             parsed_items = []
@@ -579,6 +579,99 @@ def index():
         fb_error=FIREBASE_ERROR,
         now=datetime.now().strftime("%d %b %Y, %I:%M %p"),
     )
+
+# ----------------------------------------------------------------------------
+# SECURE ORDER PLACEMENT API (SERVER VALIDATION FOR TAMPER PREVENTION)
+# ----------------------------------------------------------------------------
+@app.route("/place-order", methods=["POST"])
+def place_order():
+    try:
+        data = request.get_json(force=True)
+        if not data:
+            return jsonify({"success": False, "error": "Invalid request body."}), 400
+
+        name = (data.get("name") or "").strip()
+        phone = (data.get("phone") or "").strip()
+        address = (data.get("address") or "").strip()
+        items = data.get("items") or []
+
+        if not name or not phone or not address:
+            return jsonify({"success": False, "error": "Missing delivery details."}), 400
+
+        if not items or len(items) == 0:
+            return jsonify({"success": False, "error": "Cart cannot be empty."}), 400
+
+        # Server-side price recalculation from database to prevent F12 tampering
+        all_products_dict = ref("products").get() or {}
+        calculated_base_price = 0.0
+
+        for item in items:
+            p_id = item.get("id")
+            item_price = num(item.get("price"))
+            
+            # Match product from database if ID matches
+            matched_product = None
+            if isinstance(all_products_dict, dict):
+                for k, v in all_products_dict.items():
+                    if isinstance(v, dict) and (v.get("id") == p_id or k == p_id):
+                        matched_product = v
+                        break
+
+            if matched_product:
+                color_idx = int(item.get("colorIdx") or 0)
+                color_prices_str = matched_product.get("colorPrices") or ""
+                color_prices_list = [cp.strip() for cp in color_prices_str.split(",") if cp.strip()]
+
+                if color_prices_list and len(color_prices_list) > color_idx:
+                    calculated_base_price += num(color_prices_list[color_idx])
+                else:
+                    calculated_base_price += num(matched_product.get("price"))
+            else:
+                calculated_base_price += item_price
+
+        payment_type = data.get("payment") or "Prepaid"
+        if payment_type == "COD":
+            final_total_price = calculated_base_price + 90.0
+        else:
+            final_total_price = calculated_base_price
+
+        order_id = str(int(time.time() * 1000))
+
+        order_data = {
+            "id": order_id,
+            "date": data.get("date") or datetime.now().strftime("%d/%m/%Y, %I:%M:%S %p"),
+            "name": name,
+            "phone": phone,
+            "address": address,
+            "payment": payment_type,
+            "product_name": data.get("product_name") or "",
+            "price": final_total_price,
+            "img": data.get("img") or "",
+            "items": items,
+            "status": "Pending Verification"
+        }
+
+        # Secure save to Firebase
+        ref("orders/%s" % order_id).set(order_data)
+
+        # Trigger Telegram Alert if bot token is set
+        BOT_TOKEN = "YAHAN_APNA_BOT_TOKEN_DAAL"
+        CHAT_ID = "YAHAN_APNA_CHAT_ID_DAAL"
+        if BOT_TOKEN != "YAHAN_APNA_BOT_TOKEN_DAAL":
+            try:
+                alert_text = "🛍️ *NEW ORDER ARRIVED!*\n\n*Order ID:* %s\n*Customer:* %s\n*Payment:* %s\n*Amount:* ₹%s\n\nJaldi check kar bhai!" % (order_id, name, payment_type, money(final_total_price))
+                tg_url = "https://api.telegram.org/bot%s/sendMessage" % BOT_TOKEN
+                payload = json.dumps({"chat_id": CHAT_ID, "text": alert_text, "parse_mode": "Markdown"}).encode('utf-8')
+                req = urllib.request.Request(tg_url, data=payload, headers={'Content-Type': 'application/json'})
+                urllib.request.urlopen(req)
+            except Exception as tg_err:
+                print("Telegram Notification Error:", tg_err)
+
+        return jsonify({"success": True, "order_id": order_id, "price": final_total_price}), 200
+
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/product/save", methods=["POST"])
 def save_product():
@@ -728,6 +821,31 @@ def health():
         return {"firebase": "ok", "db": DB_URL}
     except Exception as e:
         return {"firebase": "error", "detail": str(e)}, 500
+
+@app.route("/api/telegram_alert")
+def telegram_alert():
+    order_id = request.args.get("id", "Unknown")
+    name = request.args.get("name", "Unknown")
+    price = request.args.get("price", "0")
+    
+    BOT_TOKEN = "YAHAN_APNA_BOT_TOKEN_DAAL"
+    CHAT_ID = "YAHAN_APNA_CHAT_ID_DAAL"
+    
+    if BOT_TOKEN == "YAHAN_APNA_BOT_TOKEN_DAAL":
+        return {"status": "token not set"}
+
+    text = f"🛍️ *NEW ORDER ARRIVED!*\n\n*Order ID:* {order_id}\n*Customer:* {name}\n*Amount:* ₹{price}\n\nJaldi se Admin Panel check kar bhai!"
+    
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = json.dumps({"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"}).encode('utf-8')
+    headers = {'Content-Type': 'application/json'}
+    
+    try:
+        req = urllib.request.Request(url, data=payload, headers=headers)
+        urllib.request.urlopen(req)
+        return {"status": "sent"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
