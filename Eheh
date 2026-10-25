@@ -15,7 +15,6 @@ from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, db
 from flask import Flask, render_template_string, request, redirect, url_for, flash, jsonify
-from flask_cors import CORS
 
 # ----------------------------------------------------------------------------
 # CONFIG
@@ -34,7 +33,14 @@ DB_URL = os.environ.get(
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "mz-fashion-admin-secret-change-me")
-CORS(app)
+
+# CORS Fix for PythonAnywhere (Bina kisi extra module ke)
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 # ----------------------------------------------------------------------------
 # FIREBASE INIT
