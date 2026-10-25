@@ -15,6 +15,7 @@ from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, db
 from flask import Flask, render_template_string, request, redirect, url_for, flash, jsonify
+from flask_cors import CORS
 
 # ----------------------------------------------------------------------------
 # CONFIG
@@ -33,14 +34,7 @@ DB_URL = os.environ.get(
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "mz-fashion-admin-secret-change-me")
-
-# CORS Fix for PythonAnywhere (Bina kisi extra module ke)
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
+CORS(app)
 
 # ----------------------------------------------------------------------------
 # FIREBASE INIT
@@ -299,6 +293,14 @@ TEMPLATE = """
     <h2>{{ 'Edit Product' if edit_product else 'Add Product' }}</h2>
     <form method="post" action="{{ url_for('save_product') }}">
       <input type="hidden" name="key" value="{{ edit_product.key if edit_product else '' }}">
+      
+      <div style="margin-bottom: 15px; padding: 10px; border: 1px solid var(--danger); border-radius: 8px; background: #fffcfc;">
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <input type="checkbox" name="isOutOfStock" value="true" id="isOutOfStock" style="width: auto; accent-color: var(--danger);" {{ 'checked' if edit_product and edit_product.isOutOfStock == 'true' else '' }}>
+          <label for="isOutOfStock" style="margin:0; font-size:14px; text-transform:none; color:var(--danger); font-weight:bold;">Mark Entire Product as OUT OF STOCK</label>
+        </div>
+      </div>
+
       <div class="grid2">
         <div>
           <label>Product Name *</label>
@@ -332,6 +334,10 @@ TEMPLATE = """
         <div>
           <label>Color Names (comma separated)</label>
           <input name="colorNames" placeholder="Grey, Black, Red" value="{{ edit_product.colorNames if edit_product else '' }}">
+        </div>
+        <div>
+          <label>Out of Stock Colors (true/false, comma separated)</label>
+          <input name="outOfStockColors" placeholder="false, true, false" value="{{ edit_product.outOfStockColors if edit_product else '' }}" style="border-color:var(--danger);">
         </div>
         <div>
           <label>Color Specific Shirt Sizes (use | to separate)</label>
@@ -376,12 +382,18 @@ TEMPLATE = """
       <div class="row">
         <img src="{{ p.get('img') or placeholder }}" alt="{{ p.get('name') or 'product' }}" style="width:60px; height:60px; border-radius:10px; object-fit:cover; flex:0 0 auto;">
         <div style="flex:1; min-width:0;">
-          <b style="display:block; font-size:14px;">{{ p.get('name') }} &nbsp;<span class="pill">{{ p.get('category') or 'no category' }}</span>{% if p.get('isFlipkart') == 'true' %}<span class="pill" style="background:#0284c7; color:#fff; margin-left:5px;">Flipkart</span>{% endif %}</b>
+          <b style="display:block; font-size:14px;">
+            {{ p.get('name') }} &nbsp;
+            <span class="pill">{{ p.get('category') or 'no category' }}</span>
+            {% if p.get('isFlipkart') == 'true' %}<span class="pill" style="background:#0284c7; color:#fff; margin-left:5px;">Flipkart</span>{% endif %}
+            {% if p.get('isOutOfStock') == 'true' %}<span class="pill" style="background:var(--danger); color:#fff; margin-left:5px;">OOS</span>{% endif %}
+          </b>
           <small style="display:block; color:var(--ink-soft); font-size:12px; line-height:1.5;">
             &#8377;{{ p._price }}{% if p._mrp %} &middot; MRP &#8377;{{ p._mrp }}{% endif %}{% if p.get('discount') %} &middot; {{ p.get('discount') }} OFF{% endif %}<br>
             {% if p.get('shirtSizes') %}Shirt: {{ p.get('shirtSizes') }}{% endif %}
             {% if p.get('jeansSizes') %} &middot; Jeans: {{ p.get('jeansSizes') }}{% endif %}
             {% if p.get('colorNames') %}<br><span style="color:var(--ink-soft);">Colors: {{ p.get('colorNames') }}</span>{% endif %}
+            {% if p.get('outOfStockColors') %}<br><span style="color:var(--danger);">OOS Colors Status: {{ p.get('outOfStockColors') }}</span>{% endif %}
           </small>
         </div>
         <a class="btn sm ghost" href="{{ url_for('index', tab='products', edit=p.key) }}">Edit</a>
@@ -728,6 +740,8 @@ def save_product():
         "colorPrices": (f.get("colorPrices") or "").strip(), 
         "colorMRPs": (f.get("colorMRPs") or "").strip(),     
         "isFlipkart": "true" if f.get("isFlipkart") else "false",
+        "isOutOfStock": "true" if f.get("isOutOfStock") else "false",
+        "outOfStockColors": (f.get("outOfStockColors") or "").strip(),
     }
 
     key = (f.get("key") or "").strip()
